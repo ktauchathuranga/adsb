@@ -1,0 +1,352 @@
+//! Aircraft tracking and position decoding
+//!
+//! Maintains a database of recently seen aircraft and decodes CPR positions.
+
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
+
+use crate::decoder::ModesMessage;
+
+/// Tracked aircraft data
+#[derive(Debug, Clone)]
+pub struct Aircraft {
+    /// ICAO 24-bit address
+    pub addr: u32,
+    /// Hex address string
+    pub hex_addr: String,
+    /// Flight callsign
+    pub flight: String,
+    /// Altitude in feet
+    pub altitude: i32,
+    /// Ground speed in knots
+    pub speed: u16,
+    /// Track/heading in degrees
+    pub track: u16,
+    /// Last seen timestamp
+    pub seen: Instant,
+    /// Message count
+    pub messages: u64,
+    /// Odd CPR latitude
+    pub odd_cprlat: u32,
+    /// Odd CPR longitude
+    pub odd_cprlon: u32,
+    /// Odd CPR timestamp
+    pub odd_cprtime: Instant,
+    /// Even CPR latitude
+    pub even_cprlat: u32,
+    /// Even CPR longitude
+    pub even_cprlon: u32,
+    /// Even CPR timestamp
+    pub even_cprtime: Instant,
+    /// Decoded latitude
+    pub lat: f64,
+    /// Decoded longitude
+    pub lon: f64,
+}
+
+impl Aircraft {
+    pub fn new(addr: u32) -> Self {
+        let now = Instant::now();
+        Self {
+            addr,
+            hex_addr: format!("{:06X}", addr),
+            flight: String::new(),
+            altitude: 0,
+            speed: 0,
+            track: 0,
+            seen: now,
+            messages: 0,
+            odd_cprlat: 0,
+            odd_cprlon: 0,
+            odd_cprtime: now,
+            even_cprlat: 0,
+            even_cprlon: 0,
+            even_cprtime: now,
+            lat: 0.0,
+            lon: 0.0,
+        }
+    }
+}
+
+/// Store for tracking multiple aircraft
+pub struct AircraftStore {
+    aircraft: HashMap<u32, Aircraft>,
+    ttl: Duration,
+}
+
+impl AircraftStore {
+    pub fn new(ttl_secs: u64) -> Self {
+        Self {
+            aircraft: HashMap::new(),
+            ttl: Duration::from_secs(ttl_secs),
+        }
+    }
+
+    /// Update aircraft from a decoded message
+    pub fn update_from_message(&mut self, mm: &ModesMessage) -> Option<&Aircraft> {
+        let addr = mm.icao_address();
+
+        let aircraft = self.aircraft.entry(addr).or_insert_with(|| Aircraft::new(addr));
+        aircraft.seen = Instant::now();
+        aircraft.messages += 1;
+
+        match mm.msg_type {
+            0 | 4 | 20 => {
+                aircraft.altitude = mm.altitude;
+            }
+            17 => {
+                if (1..=4).contains(&mm.me_type) {
+                    aircraft.flight = mm.flight.clone();
+                } else if (9..=18).contains(&mm.me_type) {
+                    aircraft.altitude = mm.altitude;
+
+                    if mm.fflag {
+                        // Odd frame
+                        aircraft.odd_cprlat = mm.raw_latitude;
+                        aircraft.odd_cprlon = mm.raw_longitude;
+                        aircraft.odd_cprtime = Instant::now();
+                    } else {
+                        // Even frame
+                        aircraft.even_cprlat = mm.raw_latitude;
+                        aircraft.even_cprlon = mm.raw_longitude;
+                        aircraft.even_cprtime = Instant::now();
+                    }
+
+                    // Decode position if we have both frames within 10 seconds
+                    let time_diff = if aircraft.even_cprtime > aircraft.odd_cprtime {
+                        aircraft.even_cprtime.duration_since(aircraft.odd_cprtime)
+                    } else {
+                        aircraft.odd_cprtime.duration_since(aircraft.even_cprtime)
+                    };
+
+                    if time_diff <= Duration::from_secs(10) {
+                        self.decode_cpr(addr);
+                    }
+                } else if mm.me_type == 19 {
+                    if mm.me_sub == 1 || mm.me_sub == 2 {
+                        aircraft.speed = mm.velocity;
+                        aircraft.track = mm.heading as u16;
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        self.aircraft.get(&addr)
+    }
+
+    /// Get aircraft by ICAO address
+    pub fn get(&self, addr: u32) -> Option<&Aircraft> {
+        self.aircraft.get(&addr)
+    }
+
+    /// Get all aircraft
+    pub fn all(&self) -> impl Iterator<Item = &Aircraft> {
+        self.aircraft.values()
+    }
+
+    /// Remove stale aircraft
+    pub fn remove_stale(&mut self) {
+        let now = Instant::now();
+        self.aircraft.retain(|_, a| now.duration_since(a.seen) <= self.ttl);
+    }
+
+    /// Number of tracked aircraft
+    pub fn len(&self) -> usize {
+        self.aircraft.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.aircraft.is_empty()
+    }
+
+    /// Decode CPR coordinates for an aircraft.
+    ///
+    /// # CPR Decoding Algorithm
+    /// CPR (Compact Position Reporting) encodes lat/lon in 17 bits each.
+    /// Two messages (odd and even) are needed to decode the full position.
+    ///
+    /// Reference: http://www.lll.lu/~edward/edward/adsb/DecodingADSBposition.html
+    fn decode_cpr(&mut self, addr: u32) {
+        let aircraft = match self.aircraft.get_mut(&addr) {
+            Some(a) => a,
+            None => return,
+        };
+
+        const AIR_DLAT0: f64 = 360.0 / 60.0;
+        const AIR_DLAT1: f64 = 360.0 / 59.0;
+
+        let lat0 = aircraft.even_cprlat as f64;
+        let lat1 = aircraft.odd_cprlat as f64;
+        let lon0 = aircraft.even_cprlon as f64;
+        let lon1 = aircraft.odd_cprlon as f64;
+
+        // Compute latitude index j
+        let j = ((59.0 * lat0 - 60.0 * lat1) / 131072.0 + 0.5).floor() as i32;
+
+        let mut rlat0 = AIR_DLAT0 * (cpr_mod(j, 60) as f64 + lat0 / 131072.0);
+        let mut rlat1 = AIR_DLAT1 * (cpr_mod(j, 59) as f64 + lat1 / 131072.0);
+
+        if rlat0 >= 270.0 { rlat0 -= 360.0; }
+        if rlat1 >= 270.0 { rlat1 -= 360.0; }
+
+        // Check both are in same latitude zone
+        if cpr_nl(rlat0) != cpr_nl(rlat1) {
+            return;
+        }
+
+        // Use the most recent frame
+        if aircraft.even_cprtime > aircraft.odd_cprtime {
+            // Use even packet
+            let ni = cpr_n(rlat0, false);
+            let m = ((lon0 * (cpr_nl(rlat0) - 1) as f64 - lon1 * cpr_nl(rlat0) as f64)
+                     / 131072.0 + 0.5).floor() as i32;
+            aircraft.lon = cpr_dlon(rlat0, false) * (cpr_mod(m, ni) as f64 + lon0 / 131072.0);
+            aircraft.lat = rlat0;
+        } else {
+            // Use odd packet
+            let ni = cpr_n(rlat1, true);
+            let m = ((lon0 * (cpr_nl(rlat1) - 1) as f64 - lon1 * cpr_nl(rlat1) as f64)
+                     / 131072.0 + 0.5).floor() as i32;
+            aircraft.lon = cpr_dlon(rlat1, true) * (cpr_mod(m, ni) as f64 + lon1 / 131072.0);
+            aircraft.lat = rlat1;
+        }
+
+        if aircraft.lon > 180.0 {
+            aircraft.lon -= 360.0;
+        }
+    }
+
+    /// Generate JSON representation of all aircraft
+    pub fn to_json(&self) -> String {
+        let mut json = String::from("[\n");
+        let mut first = true;
+
+        for aircraft in self.aircraft.values() {
+            if aircraft.lat == 0.0 && aircraft.lon == 0.0 {
+                continue;
+            }
+
+            if !first {
+                json.push_str(",\n");
+            }
+            first = false;
+
+            json.push_str(&format!(
+                r#"{{"hex":"{}","flight":"{}","lat":{},"lon":{},"altitude":{},"track":{},"speed":{}}}"#,
+                aircraft.hex_addr,
+                aircraft.flight,
+                aircraft.lat,
+                aircraft.lon,
+                aircraft.altitude,
+                aircraft.track,
+                aircraft.speed
+            ));
+        }
+
+        json.push_str("\n]");
+        json
+    }
+}
+
+/// CPR modulo function (always positive)
+fn cpr_mod(a: i32, b: i32) -> i32 {
+    let res = a % b;
+    if res < 0 { res + b } else { res }
+}
+
+/// CPR NL function - number of longitude zones at given latitude
+/// Uses precomputed table from 1090-WP-9-14
+fn cpr_nl(lat: f64) -> i32 {
+    let lat = lat.abs();
+
+    if lat < 10.47047130 { 59 }
+    else if lat < 14.82817437 { 58 }
+    else if lat < 18.18626357 { 57 }
+    else if lat < 21.02939493 { 56 }
+    else if lat < 23.54504487 { 55 }
+    else if lat < 25.82924707 { 54 }
+    else if lat < 27.93898710 { 53 }
+    else if lat < 29.91135686 { 52 }
+    else if lat < 31.77209708 { 51 }
+    else if lat < 33.53993436 { 50 }
+    else if lat < 35.22899598 { 49 }
+    else if lat < 36.85025108 { 48 }
+    else if lat < 38.41241892 { 47 }
+    else if lat < 39.92256684 { 46 }
+    else if lat < 41.38651832 { 45 }
+    else if lat < 42.80914012 { 44 }
+    else if lat < 44.19454951 { 43 }
+    else if lat < 45.54626723 { 42 }
+    else if lat < 46.86733252 { 41 }
+    else if lat < 48.16039128 { 40 }
+    else if lat < 49.42776439 { 39 }
+    else if lat < 50.67150166 { 38 }
+    else if lat < 51.89342469 { 37 }
+    else if lat < 53.09516153 { 36 }
+    else if lat < 54.27817472 { 35 }
+    else if lat < 55.44378444 { 34 }
+    else if lat < 56.59318756 { 33 }
+    else if lat < 57.72747354 { 32 }
+    else if lat < 58.84763776 { 31 }
+    else if lat < 59.95459277 { 30 }
+    else if lat < 61.04917774 { 29 }
+    else if lat < 62.13216659 { 28 }
+    else if lat < 63.20427479 { 27 }
+    else if lat < 64.26616523 { 26 }
+    else if lat < 65.31845310 { 25 }
+    else if lat < 66.36171008 { 24 }
+    else if lat < 67.39646774 { 23 }
+    else if lat < 68.42322022 { 22 }
+    else if lat < 69.44242631 { 21 }
+    else if lat < 70.45451075 { 20 }
+    else if lat < 71.45986473 { 19 }
+    else if lat < 72.45884545 { 18 }
+    else if lat < 73.45177442 { 17 }
+    else if lat < 74.43893416 { 16 }
+    else if lat < 75.42056257 { 15 }
+    else if lat < 76.39684391 { 14 }
+    else if lat < 77.36789461 { 13 }
+    else if lat < 78.33374083 { 12 }
+    else if lat < 79.29428225 { 11 }
+    else if lat < 80.24923213 { 10 }
+    else if lat < 81.19801349 { 9 }
+    else if lat < 82.13956981 { 8 }
+    else if lat < 83.07199445 { 7 }
+    else if lat < 83.99173563 { 6 }
+    else if lat < 84.89166191 { 5 }
+    else if lat < 85.75541621 { 4 }
+    else if lat < 86.53536998 { 3 }
+    else if lat < 87.00000000 { 2 }
+    else { 1 }
+}
+
+/// CPR N function
+fn cpr_n(lat: f64, is_odd: bool) -> i32 {
+    let nl = cpr_nl(lat) - if is_odd { 1 } else { 0 };
+    if nl < 1 { 1 } else { nl }
+}
+
+/// CPR Dlon function
+fn cpr_dlon(lat: f64, is_odd: bool) -> f64 {
+    360.0 / cpr_n(lat, is_odd) as f64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cpr_nl() {
+        assert_eq!(cpr_nl(0.0), 59);
+        assert_eq!(cpr_nl(45.0), 42);
+        assert_eq!(cpr_nl(89.0), 1);
+    }
+
+    #[test]
+    fn test_cpr_mod() {
+        assert_eq!(cpr_mod(5, 3), 2);
+        assert_eq!(cpr_mod(-1, 3), 2);
+        assert_eq!(cpr_mod(-5, 3), 1);
+    }
+}
