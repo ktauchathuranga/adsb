@@ -1,11 +1,11 @@
 //! Aircraft tracking and position decoding
 //!
-//! Maintains a database of recently seen aircraft and decodes CPR positions.
+//!  Maintains a database of recently seen aircraft and decodes CPR positions. 
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use crate::decoder::ModesMessage;
+use crate::decoder::{ModesMessage, BdsData};
 
 /// Tracked aircraft data
 #[derive(Debug, Clone)]
@@ -13,9 +13,9 @@ pub struct Aircraft {
     /// ICAO 24-bit address
     pub addr: u32,
     /// Hex address string
-    pub hex_addr: String,
+    pub hex_addr:  String,
     /// Flight callsign
-    pub flight: String,
+    pub flight:  String,
     /// Altitude in feet
     pub altitude: i32,
     /// Ground speed in knots
@@ -31,7 +31,7 @@ pub struct Aircraft {
     /// Odd CPR longitude
     pub odd_cprlon: u32,
     /// Odd CPR timestamp
-    pub odd_cprtime: Instant,
+    pub odd_cprtime:  Instant,
     /// Even CPR latitude
     pub even_cprlat: u32,
     /// Even CPR longitude
@@ -42,6 +42,22 @@ pub struct Aircraft {
     pub lat: f64,
     /// Decoded longitude
     pub lon: f64,
+    /// Roll angle (from BDS 5,0)
+    pub roll_angle: Option<f32>,
+    /// True airspeed (from BDS 5,0 or 6,0)
+    pub true_airspeed: Option<u16>,
+    /// Indicated airspeed (from BDS 6,0)
+    pub indicated_airspeed: Option<u16>,
+    /// Mach number (from BDS 6,0)
+    pub mach: Option<f32>,
+    /// Magnetic heading (from BDS 6,0)
+    pub magnetic_heading: Option<f32>,
+    /// Barometric altitude rate (from BDS 6,0)
+    pub baro_altitude_rate: Option<i16>,
+    /// MCP/FCU selected altitude (from BDS 4,0)
+    pub selected_altitude: Option<u16>,
+    /// Barometric pressure setting (from BDS 4,0)
+    pub baro_setting: Option<f32>,
 }
 
 impl Aircraft {
@@ -50,20 +66,28 @@ impl Aircraft {
         Self {
             addr,
             hex_addr: format!("{:06X}", addr),
-            flight: String::new(),
+            flight:  String::new(),
             altitude: 0,
             speed: 0,
             track: 0,
             seen: now,
             messages: 0,
             odd_cprlat: 0,
-            odd_cprlon: 0,
+            odd_cprlon:  0,
             odd_cprtime: now,
             even_cprlat: 0,
-            even_cprlon: 0,
+            even_cprlon:  0,
             even_cprtime: now,
             lat: 0.0,
             lon: 0.0,
+            roll_angle: None,
+            true_airspeed: None,
+            indicated_airspeed: None,
+            mach:  None,
+            magnetic_heading:  None,
+            baro_altitude_rate: None,
+            selected_altitude: None,
+            baro_setting: None,
         }
     }
 }
@@ -77,7 +101,7 @@ pub struct AircraftStore {
 impl AircraftStore {
     pub fn new(ttl_secs: u64) -> Self {
         Self {
-            aircraft: HashMap::new(),
+            aircraft:  HashMap::new(),
             ttl: Duration::from_secs(ttl_secs),
         }
     }
@@ -91,8 +115,23 @@ impl AircraftStore {
         aircraft.messages += 1;
 
         match mm.msg_type {
-            0 | 4 | 20 => {
+            0 | 4 | 16 | 20 => {
                 aircraft.altitude = mm.altitude;
+                
+                // Extract BDS data if present (DF20)
+                if mm.msg_type == 20 {
+                    if let Some(ref bds) = mm.bds_data {
+                        self.update_from_bds(addr, bds);
+                    }
+                }
+            }
+            5 | 21 => {
+                // Extract BDS data if present (DF21)
+                if mm. msg_type == 21 {
+                    if let Some(ref bds) = mm.bds_data {
+                        self. update_from_bds(addr, bds);
+                    }
+                }
             }
             17 => {
                 if (1..=4).contains(&mm.me_type) {
@@ -101,20 +140,17 @@ impl AircraftStore {
                     aircraft.altitude = mm.altitude;
 
                     if mm.fflag {
-                        // Odd frame
                         aircraft.odd_cprlat = mm.raw_latitude;
                         aircraft.odd_cprlon = mm.raw_longitude;
                         aircraft.odd_cprtime = Instant::now();
                     } else {
-                        // Even frame
                         aircraft.even_cprlat = mm.raw_latitude;
-                        aircraft.even_cprlon = mm.raw_longitude;
+                        aircraft. even_cprlon = mm. raw_longitude;
                         aircraft.even_cprtime = Instant::now();
                     }
 
-                    // Decode position if we have both frames within 10 seconds
                     let time_diff = if aircraft.even_cprtime > aircraft.odd_cprtime {
-                        aircraft.even_cprtime.duration_since(aircraft.odd_cprtime)
+                        aircraft.even_cprtime. duration_since(aircraft.odd_cprtime)
                     } else {
                         aircraft.odd_cprtime.duration_since(aircraft.even_cprtime)
                     };
@@ -135,6 +171,75 @@ impl AircraftStore {
         self.aircraft.get(&addr)
     }
 
+    /// Update aircraft with BDS data
+    fn update_from_bds(&mut self, addr: u32, bds:  &BdsData) {
+        let aircraft = match self.aircraft.get_mut(&addr) {
+            Some(a) => a,
+            None => return,
+        };
+
+        match bds {
+            BdsData::AircraftIdentification { callsign } => {
+                if aircraft.flight.is_empty() {
+                    aircraft.flight = callsign.clone();
+                }
+            }
+            BdsData:: SelectedVerticalIntention { 
+                mcp_altitude, 
+                baro_setting, 
+                .. 
+            } => {
+                if let Some(alt) = mcp_altitude {
+                    aircraft.selected_altitude = Some(*alt);
+                }
+                if let Some(baro) = baro_setting {
+                    aircraft.baro_setting = Some(*baro);
+                }
+            }
+            BdsData::TrackAndTurnReport { 
+                roll_angle, 
+                ground_speed, 
+                true_airspeed,
+                true_track,
+                .. 
+            } => {
+                if let Some(roll) = roll_angle {
+                    aircraft.roll_angle = Some(*roll);
+                }
+                if let Some(gs) = ground_speed {
+                    aircraft.speed = *gs;
+                }
+                if let Some(tas) = true_airspeed {
+                    aircraft.true_airspeed = Some(*tas);
+                }
+                if let Some(track) = true_track {
+                    aircraft.track = *track as u16;
+                }
+            }
+            BdsData::HeadingAndSpeedReport { 
+                magnetic_heading, 
+                indicated_airspeed, 
+                mach, 
+                baro_altitude_rate,
+                .. 
+            } => {
+                if let Some(hdg) = magnetic_heading {
+                    aircraft.magnetic_heading = Some(*hdg);
+                }
+                if let Some(ias) = indicated_airspeed {
+                    aircraft.indicated_airspeed = Some(*ias);
+                }
+                if let Some(m) = mach {
+                    aircraft.mach = Some(*m);
+                }
+                if let Some(rate) = baro_altitude_rate {
+                    aircraft.baro_altitude_rate = Some(*rate);
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// Get aircraft by ICAO address
     pub fn get(&self, addr: u32) -> Option<&Aircraft> {
         self.aircraft.get(&addr)
@@ -148,7 +253,7 @@ impl AircraftStore {
     /// Remove stale aircraft
     pub fn remove_stale(&mut self) {
         let now = Instant::now();
-        self.aircraft.retain(|_, a| now.duration_since(a.seen) <= self.ttl);
+        self.aircraft.retain(|_, a| now. duration_since(a.seen) <= self.ttl);
     }
 
     /// Number of tracked aircraft
@@ -157,23 +262,17 @@ impl AircraftStore {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.aircraft.is_empty()
+        self.aircraft. is_empty()
     }
 
-    /// Decode CPR coordinates for an aircraft.
-    ///
-    /// # CPR Decoding Algorithm
-    /// CPR (Compact Position Reporting) encodes lat/lon in 17 bits each.
-    /// Two messages (odd and even) are needed to decode the full position.
-    ///
-    /// Reference: http://www.lll.lu/~edward/edward/adsb/DecodingADSBposition.html
+    /// Decode CPR coordinates for an aircraft. 
     fn decode_cpr(&mut self, addr: u32) {
         let aircraft = match self.aircraft.get_mut(&addr) {
             Some(a) => a,
             None => return,
         };
 
-        const AIR_DLAT0: f64 = 360.0 / 60.0;
+        const AIR_DLAT0:  f64 = 360.0 / 60.0;
         const AIR_DLAT1: f64 = 360.0 / 59.0;
 
         let lat0 = aircraft.even_cprlat as f64;
@@ -181,7 +280,6 @@ impl AircraftStore {
         let lon0 = aircraft.even_cprlon as f64;
         let lon1 = aircraft.odd_cprlon as f64;
 
-        // Compute latitude index j
         let j = ((59.0 * lat0 - 60.0 * lat1) / 131072.0 + 0.5).floor() as i32;
 
         let mut rlat0 = AIR_DLAT0 * (cpr_mod(j, 60) as f64 + lat0 / 131072.0);
@@ -190,21 +288,17 @@ impl AircraftStore {
         if rlat0 >= 270.0 { rlat0 -= 360.0; }
         if rlat1 >= 270.0 { rlat1 -= 360.0; }
 
-        // Check both are in same latitude zone
         if cpr_nl(rlat0) != cpr_nl(rlat1) {
             return;
         }
 
-        // Use the most recent frame
         if aircraft.even_cprtime > aircraft.odd_cprtime {
-            // Use even packet
             let ni = cpr_n(rlat0, false);
             let m = ((lon0 * (cpr_nl(rlat0) - 1) as f64 - lon1 * cpr_nl(rlat0) as f64)
                      / 131072.0 + 0.5).floor() as i32;
             aircraft.lon = cpr_dlon(rlat0, false) * (cpr_mod(m, ni) as f64 + lon0 / 131072.0);
             aircraft.lat = rlat0;
         } else {
-            // Use odd packet
             let ni = cpr_n(rlat1, true);
             let m = ((lon0 * (cpr_nl(rlat1) - 1) as f64 - lon1 * cpr_nl(rlat1) as f64)
                      / 131072.0 + 0.5).floor() as i32;
@@ -223,7 +317,7 @@ impl AircraftStore {
         let mut first = true;
 
         for aircraft in self.aircraft.values() {
-            if aircraft.lat == 0.0 && aircraft.lon == 0.0 {
+            if aircraft.lat == 0.0 && aircraft. lon == 0.0 {
                 continue;
             }
 
@@ -232,15 +326,44 @@ impl AircraftStore {
             }
             first = false;
 
+            // Build extended JSON with BDS data
+            let mut extra = String::new();
+            
+            if let Some(ias) = aircraft.indicated_airspeed {
+                extra.push_str(&format!(r#","ias":{}"#, ias));
+            }
+            if let Some(tas) = aircraft.true_airspeed {
+                extra.push_str(&format!(r#","tas":{}"#, tas));
+            }
+            if let Some(mach) = aircraft.mach {
+                extra.push_str(&format!(r#","mach":{:.3}"#, mach));
+            }
+            if let Some(roll) = aircraft.roll_angle {
+                extra.push_str(&format!(r#","roll":{:.1}"#, roll));
+            }
+            if let Some(hdg) = aircraft.magnetic_heading {
+                extra.push_str(&format!(r#","mag_hdg":{:.1}"#, hdg));
+            }
+            if let Some(rate) = aircraft.baro_altitude_rate {
+                extra.push_str(&format!(r#","vert_rate":{}"#, rate));
+            }
+            if let Some(sel_alt) = aircraft.selected_altitude {
+                extra.push_str(&format!(r#","sel_alt":{}"#, sel_alt));
+            }
+            if let Some(baro) = aircraft.baro_setting {
+                extra.push_str(&format!(r#","baro":{:.1}"#, baro));
+            }
+
             json.push_str(&format!(
-                r#"{{"hex":"{}","flight":"{}","lat":{},"lon":{},"altitude":{},"track":{},"speed":{}}}"#,
-                aircraft.hex_addr,
+                r#"{{"hex":"{}","flight":"{}","lat": {},"lon":{},"altitude": {},"track":{},"speed":{}{}}}"#,
+                aircraft. hex_addr,
                 aircraft.flight,
                 aircraft.lat,
-                aircraft.lon,
+                aircraft. lon,
                 aircraft.altitude,
                 aircraft.track,
-                aircraft.speed
+                aircraft.speed,
+                extra
             ));
         }
 
@@ -256,9 +379,8 @@ fn cpr_mod(a: i32, b: i32) -> i32 {
 }
 
 /// CPR NL function - number of longitude zones at given latitude
-/// Uses precomputed table from 1090-WP-9-14
 fn cpr_nl(lat: f64) -> i32 {
-    let lat = lat.abs();
+    let lat = lat. abs();
 
     if lat < 10.47047130 { 59 }
     else if lat < 14.82817437 { 58 }
@@ -322,7 +444,7 @@ fn cpr_nl(lat: f64) -> i32 {
 }
 
 /// CPR N function
-fn cpr_n(lat: f64, is_odd: bool) -> i32 {
+fn cpr_n(lat:  f64, is_odd: bool) -> i32 {
     let nl = cpr_nl(lat) - if is_odd { 1 } else { 0 };
     if nl < 1 { 1 } else { nl }
 }
@@ -348,5 +470,22 @@ mod tests {
         assert_eq!(cpr_mod(5, 3), 2);
         assert_eq!(cpr_mod(-1, 3), 2);
         assert_eq!(cpr_mod(-5, 3), 1);
+    }
+
+    #[test]
+    fn test_aircraft_new() {
+        let ac = Aircraft::new(0x4840D6);
+        assert_eq!(ac. addr, 0x4840D6);
+        assert_eq!(ac.hex_addr, "4840D6");
+        assert_eq!(ac.messages, 0);
+        assert!(ac.roll_angle.is_none());
+        assert!(ac.mach.is_none());
+    }
+
+    #[test]
+    fn test_aircraft_store() {
+        let mut store = AircraftStore::new(60);
+        assert!(store.is_empty());
+        assert_eq!(store.len(), 0);
     }
 }
