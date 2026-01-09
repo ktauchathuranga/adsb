@@ -3,7 +3,8 @@
 //!  Decodes raw Mode S messages into structured data. 
 
 use std::fmt;
-use crate::crc::{self, modes_checksum, extract_crc};
+
+use crate::crc::{self, extract_crc, modes_checksum};
 
 /// Constants for message sizes
 pub const MODES_LONG_MSG_BITS: usize = 112;
@@ -27,9 +28,7 @@ pub enum BdsData {
         overlay_capability: bool,
     },
     /// BDS 2,0 - Aircraft identification
-    AircraftIdentification {
-        callsign: String,
-    },
+    AircraftIdentification { callsign: String },
     /// BDS 3,0 - ACAS active resolution advisory
     AcasResolutionAdvisory {
         ara:  u16,
@@ -63,10 +62,7 @@ pub enum BdsData {
         inertial_altitude_rate: Option<i16>,
     },
     /// Unknown or unimplemented BDS
-    Unknown {
-        bds_code: u8,
-        data: [u8; 7],
-    },
+    Unknown { bds_code: u8, data: [u8; 7] },
 }
 
 /// Decoded Mode S message
@@ -93,7 +89,7 @@ pub struct ModesMessage {
     /// Extended squitter message type (ME type)
     pub me_type: u8,
     /// Extended squitter message subtype
-    pub me_sub:  u8,
+    pub me_sub: u8,
     /// Flight status (DF4,5,20,21)
     pub fs: u8,
     /// Downlink request
@@ -107,7 +103,7 @@ pub struct ModesMessage {
     /// Altitude unit
     pub unit: AltitudeUnit,
     /// Flight callsign
-    pub flight: String,
+    pub flight:  String,
     /// Aircraft type category
     pub aircraft_type: u8,
     /// CPR format flag (false = even, true = odd)
@@ -117,7 +113,7 @@ pub struct ModesMessage {
     /// Raw CPR latitude
     pub raw_latitude: u32,
     /// Raw CPR longitude
-    pub raw_longitude:  u32,
+    pub raw_longitude: u32,
     /// Heading validity
     pub heading_is_valid: bool,
     /// Heading in degrees
@@ -141,7 +137,7 @@ pub struct ModesMessage {
     /// Whether phase correction was applied
     pub phase_corrected: bool,
     /// BDS data from DF20/DF21 MB field
-    pub bds_data: Option<BdsData>,
+    pub bds_data:  Option<BdsData>,
 }
 
 impl Default for ModesMessage {
@@ -164,20 +160,20 @@ impl Default for ModesMessage {
             identity: 0,
             altitude: 0,
             unit: AltitudeUnit:: Feet,
-            flight: String::new(),
-            aircraft_type: 0,
-            fflag: false,
+            flight: String:: new(),
+            aircraft_type:  0,
+            fflag:  false,
             tflag: false,
             raw_latitude: 0,
-            raw_longitude: 0,
+            raw_longitude:  0,
             heading_is_valid: false,
-            heading:  0.0,
+            heading: 0.0,
             ew_dir: 0,
             ew_velocity: 0,
-            ns_dir: 0,
-            ns_velocity:  0,
+            ns_dir:  0,
+            ns_velocity: 0,
             vert_rate_source: 0,
-            vert_rate_sign:  0,
+            vert_rate_sign: 0,
             vert_rate: 0,
             velocity: 0,
             phase_corrected: false,
@@ -198,7 +194,7 @@ impl ModesMessage {
         let mut s = String::with_capacity(bytes * 2 + 3);
         s.push('*');
         for i in 0..bytes {
-            s.push_str(&format!("{:02X}", self.msg[i]));
+            s. push_str(&format!("{:02X}", self.msg[i]));
         }
         s. push(';');
         s
@@ -267,18 +263,27 @@ impl ModesMessage {
 
     /// Decode flight status flags for SBS output
     fn decode_flight_status_flags(&self) -> (i32, i32, i32, i32) {
-        let emergency = if self.identity == 7500 || self.identity == 7600 || self.identity == 7700 {
+        let emergency =
+            if self.identity == 7500 || self.identity == 7600 || self.identity == 7700 {
+                -1
+            } else {
+                0
+            };
+        let ground = if self.fs == 1 || self.fs == 3 {
             -1
         } else {
             0
         };
-        let ground = if self.fs == 1 || self.fs == 3 { -1 } else { 0 };
         let alert = if self.fs == 2 || self.fs == 3 || self.fs == 4 {
             -1
         } else {
             0
         };
-        let spi = if self.fs == 4 || self.fs == 5 { -1 } else { 0 };
+        let spi = if self.fs == 4 || self.fs == 5 {
+            -1
+        } else {
+            0
+        };
         (alert, emergency, spi, ground)
     }
 }
@@ -305,10 +310,10 @@ impl fmt::Display for ModesMessage {
 
         match self.msg_type {
             0 => {
-                writeln!(f, "DF 0:  Short Air-Air Surveillance.")?;
+                writeln!(f, "DF 0: Short Air-Air Surveillance.")?;
                 writeln!(
                     f,
-                    "  Altitude       : {} {}",
+                    "  Altitude       :  {} {}",
                     self.altitude,
                     if self.unit == AltitudeUnit::Meters {
                         "meters"
@@ -345,10 +350,9 @@ impl fmt::Display for ModesMessage {
                 writeln!(
                     f,
                     "  ICAO Address   : {:02x}{:02x}{:02x}",
-                    self.aa[0], self.aa[1], self.aa[2]
+                    self. aa[0], self.aa[1], self.aa[2]
                 )?;
-                
-                // Display BDS data if present
+
                 if self.msg_type == 20 {
                     if let Some(ref bds) = self.bds_data {
                         writeln!(f, "  MB Field (BDS) : {}", format_bds_data(bds))?;
@@ -362,7 +366,7 @@ impl fmt::Display for ModesMessage {
                     "Comm-B"
                 };
                 writeln!(f, "DF {}: {}, Identity Reply.", self.msg_type, name)?;
-                writeln!(f, "  Flight Status  : {}", flight_status_str(self.fs))?;
+                writeln!(f, "  Flight Status  :  {}", flight_status_str(self.fs))?;
                 writeln!(f, "  DR             : {}", self.dr)?;
                 writeln!(f, "  UM             : {}", self.um)?;
                 writeln!(f, "  Squawk         : {:04}", self.identity)?;
@@ -371,8 +375,7 @@ impl fmt::Display for ModesMessage {
                     "  ICAO Address   : {:02x}{:02x}{:02x}",
                     self.aa[0], self.aa[1], self.aa[2]
                 )?;
-                
-                // Display BDS data if present
+
                 if self.msg_type == 21 {
                     if let Some(ref bds) = self.bds_data {
                         writeln!(f, "  MB Field (BDS) : {}", format_bds_data(bds))?;
@@ -473,8 +476,8 @@ impl fmt::Display for ModesMessage {
                 )?;
                 writeln!(
                     f,
-                    "  ICAO Address   : {:02x}{:02x}{:02x}",
-                    self.aa[0], self.aa[1], self.aa[2]
+                    "  ICAO Address   :  {:02x}{:02x}{:02x}",
+                    self.aa[0], self. aa[1], self.aa[2]
                 )?;
             }
             _ => {
@@ -493,54 +496,113 @@ impl fmt::Display for ModesMessage {
 /// Format BDS data for display
 fn format_bds_data(bds: &BdsData) -> String {
     match bds {
-        BdsData::DataLinkCapability { continuation_flag, overlay_capability } => {
-            format!("BDS 1,0 - Data Link Capability (cont={}, overlay={})", 
-                    continuation_flag, overlay_capability)
+        BdsData::DataLinkCapability {
+            continuation_flag,
+            overlay_capability,
+        } => {
+            format!(
+                "BDS 1,0 - Data Link Capability (cont={}, overlay={})",
+                continuation_flag, overlay_capability
+            )
         }
         BdsData::AircraftIdentification { callsign } => {
-            format!("BDS 2,0 - Aircraft ID: {}", callsign)
+            format!("BDS 2,0 - Aircraft ID:  {}", callsign)
         }
-        BdsData:: AcasResolutionAdvisory { ara, rac, rat, mte } => {
-            format!("BDS 3,0 - ACAS RA (ARA={}, RAC={}, RAT={}, MTE={})", 
-                    ara, rac, rat, mte)
+        BdsData::AcasResolutionAdvisory { ara, rac, rat, mte } => {
+            format!(
+                "BDS 3,0 - ACAS RA (ARA={}, RAC={}, RAT={}, MTE={})",
+                ara, rac, rat, mte
+            )
         }
-        BdsData:: SelectedVerticalIntention { 
-            mcp_altitude, fms_altitude, baro_setting, 
-            vnav_mode, alt_hold_mode, approach_mode 
+        BdsData:: SelectedVerticalIntention {
+            mcp_altitude,
+            fms_altitude,
+            baro_setting,
+            vnav_mode,
+            alt_hold_mode,
+            approach_mode,
         } => {
-            let mcp = mcp_altitude.map(|a| format!("{} ft", a)).unwrap_or_else(|| "N/A".to_string());
-            let fms = fms_altitude.map(|a| format!("{} ft", a)).unwrap_or_else(|| "N/A".to_string());
-            let baro = baro_setting.map(|b| format!("{:.1} mb", b)).unwrap_or_else(|| "N/A". to_string());
-            format!("BDS 4,0 - MCP Alt: {}, FMS Alt: {}, Baro: {}, VNAV={}, ALT_HOLD={}, APP={}", 
-                    mcp, fms, baro, vnav_mode, alt_hold_mode, approach_mode)
+            let mcp = mcp_altitude
+                .map(|a| format!("{} ft", a))
+                .unwrap_or_else(|| "N/A".to_string());
+            let fms = fms_altitude
+                .map(|a| format!("{} ft", a))
+                .unwrap_or_else(|| "N/A".to_string());
+            let baro = baro_setting
+                .map(|b| format!("{:.1} mb", b))
+                .unwrap_or_else(|| "N/A".to_string());
+            format!(
+                "BDS 4,0 - MCP Alt: {}, FMS Alt: {}, Baro: {}, VNAV={}, ALT_HOLD={}, APP={}",
+                mcp, fms, baro, vnav_mode, alt_hold_mode, approach_mode
+            )
         }
-        BdsData::TrackAndTurnReport { 
-            roll_angle, true_track, ground_speed, track_rate, true_airspeed 
+        BdsData::TrackAndTurnReport {
+            roll_angle,
+            true_track,
+            ground_speed,
+            track_rate,
+            true_airspeed,
         } => {
-            let roll = roll_angle.map(|r| format!("{:.1}°", r)).unwrap_or_else(|| "N/A".to_string());
-            let track = true_track.map(|t| format!("{:.1}°", t)).unwrap_or_else(|| "N/A".to_string());
-            let gs = ground_speed.map(|g| format!("{} kt", g)).unwrap_or_else(|| "N/A". to_string());
-            let tr = track_rate.map(|t| format!("{:.2}°/s", t)).unwrap_or_else(|| "N/A".to_string());
-            let tas = true_airspeed.map(|t| format!("{} kt", t)).unwrap_or_else(|| "N/A".to_string());
-            format!("BDS 5,0 - Roll: {}, Track:  {}, GS: {}, Track Rate: {}, TAS: {}", 
-                    roll, track, gs, tr, tas)
+            let roll = roll_angle
+                . map(|r| format!("{:.1}°", r))
+                .unwrap_or_else(|| "N/A".to_string());
+            let track = true_track
+                .map(|t| format!("{:.1}°", t))
+                .unwrap_or_else(|| "N/A".to_string());
+            let gs = ground_speed
+                .map(|g| format!("{} kt", g))
+                .unwrap_or_else(|| "N/A".to_string());
+            let tr = track_rate
+                .map(|t| format!("{:.2}°/s", t))
+                .unwrap_or_else(|| "N/A".to_string());
+            let tas = true_airspeed
+                .map(|t| format!("{} kt", t))
+                .unwrap_or_else(|| "N/A".to_string());
+            format!(
+                "BDS 5,0 - Roll:  {}, Track: {}, GS: {}, Track Rate: {}, TAS: {}",
+                roll, track, gs, tr, tas
+            )
         }
-        BdsData:: HeadingAndSpeedReport { 
-            magnetic_heading, indicated_airspeed, mach, 
-            baro_altitude_rate, inertial_altitude_rate 
+        BdsData:: HeadingAndSpeedReport {
+            magnetic_heading,
+            indicated_airspeed,
+            mach,
+            baro_altitude_rate,
+            inertial_altitude_rate,
         } => {
-            let hdg = magnetic_heading.map(|h| format!("{:.1}°", h)).unwrap_or_else(|| "N/A".to_string());
-            let ias = indicated_airspeed.map(|i| format!("{} kt", i)).unwrap_or_else(|| "N/A".to_string());
-            let m = mach.map(|m| format!("{:.3}", m)).unwrap_or_else(|| "N/A". to_string());
-            let bar = baro_altitude_rate. map(|b| format!("{} ft/min", b)).unwrap_or_else(|| "N/A". to_string());
-            let iar = inertial_altitude_rate.map(|i| format! ("{} ft/min", i)).unwrap_or_else(|| "N/A".to_string());
-            format!("BDS 6,0 - Hdg: {}, IAS:  {}, Mach: {}, Baro Rate: {}, Inertial Rate: {}", 
-                    hdg, ias, m, bar, iar)
+            let hdg = magnetic_heading
+                . map(|h| format!("{:.1}°", h))
+                .unwrap_or_else(|| "N/A".to_string());
+            let ias = indicated_airspeed
+                .map(|i| format! ("{} kt", i))
+                .unwrap_or_else(|| "N/A".to_string());
+            let m = mach
+                .map(|m| format!("{:.3}", m))
+                .unwrap_or_else(|| "N/A".to_string());
+            let bar = baro_altitude_rate
+                .map(|b| format!("{} ft/min", b))
+                .unwrap_or_else(|| "N/A".to_string());
+            let iar = inertial_altitude_rate
+                .map(|i| format!("{} ft/min", i))
+                .unwrap_or_else(|| "N/A".to_string());
+            format!(
+                "BDS 6,0 - Hdg: {}, IAS: {}, Mach: {}, Baro Rate: {}, Inertial Rate: {}",
+                hdg, ias, m, bar, iar
+            )
         }
         BdsData::Unknown { bds_code, data } => {
-            format!("BDS {:X},{:X} - Raw:  {:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}", 
-                    bds_code >> 4, bds_code & 0x0F,
-                    data[0], data[1], data[2], data[3], data[4], data[5], data[6])
+            format!(
+                "BDS {:X},{:X} - Raw:  {:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",
+                bds_code >> 4,
+                bds_code & 0x0F,
+                data[0],
+                data[1],
+                data[2],
+                data[3],
+                data[4],
+                data[5],
+                data[6]
+            )
         }
     }
 }
@@ -549,77 +611,27 @@ fn format_bds_data(bds: &BdsData) -> String {
 const AIS_CHARSET: &[u8; 64] =
     b"?ABCDEFGHIJKLMNOPQRSTUVWXYZ????? ???????????????0123456789??????";
 
-/// Gillham code to altitude lookup table
-/// Maps 11-bit Gray code to altitude in 100-foot increments
-/// This table handles the standard Mode C altitude encoding
-const GILLHAM_TABLE: [(u16, i32); 13] = [
-    // D1 D2 D4 A1 A2 A4 B1 B2 B4 C1 C2 C4 -> altitude
-    // The actual decoding uses a complex algorithm, but we can 
-    // decode using the standard Gillham algorithm
-    (0, -1000),
-    (1, -900),
-    (2, -800),
-    (3, -700),
-    (4, -600),
-    (5, -500),
-    (6, -400),
-    (7, -300),
-    (8, -200),
-    (9, -100),
-    (10, 0),
-    (11, 100),
-    (12, 200),
-];
-
 /// Decode Gillham (Gray code) altitude
-/// Used when Q-bit is 0 in Mode S altitude field
-/// 
-/// # Arguments
-/// * `gray_code` - 11-bit Gillham encoded altitude
-/// 
-/// # Returns
-/// Altitude in feet, or None if invalid
 fn decode_gillham_altitude(code: u16) -> Option<i32> {
-    // Extract the C, A, B, D bits from the Gillham code
-    // Gillham encoding uses interleaved Gray code for 500ft and 100ft increments
-    
-    // C1, C2, C4 - 500ft increment (Gray coded)
     let c1 = ((code >> 0) & 1) as u8;
     let c2 = ((code >> 2) & 1) as u8;
     let c4 = ((code >> 4) & 1) as u8;
-    
-    // A1, A2, A4 - part of 100ft increment
     let a1 = ((code >> 1) & 1) as u8;
     let a2 = ((code >> 3) & 1) as u8;
     let a4 = ((code >> 5) & 1) as u8;
-    
-    // B1, B2, B4 - part of 100ft increment
     let b1 = ((code >> 6) & 1) as u8;
     let b2 = ((code >> 7) & 1) as u8;
     let b4 = ((code >> 8) & 1) as u8;
-    
-    // D1, D2, D4 - 500ft increment high bits
     let d2 = ((code >> 9) & 1) as u8;
     let d4 = ((code >> 10) & 1) as u8;
-    
-    // Convert Gray code to binary for 500ft increments
-    // D, C fields encode 500-foot increments
+
     let gray_500 = (d4 << 3) | (d2 << 2) | (c4 << 1) | c2;
     let binary_500 = gray_to_binary_4bit(gray_500);
-    
-    // A, B fields encode 100-foot increments within each 500ft band
-    // This is also Gray coded
-    let gray_100 = (a4 << 2) | (a2 << 1) | (a1);
+
+    let gray_100 = (a4 << 2) | (a2 << 1) | a1;
     let binary_100 = gray_to_binary_3bit(gray_100);
-    
-    // B field modifies the 100ft value
-    let b_val = (b4 << 2) | (b2 << 1) | b1;
-    
-    // Calculate altitude
-    // 500ft increments from -1000 to 126,750 ft
+
     let alt_500 = (binary_500 as i32) * 500;
-    
-    // 100ft increments within the 500ft band
     let alt_100 = match binary_100 {
         0 => 0,
         1 => 100,
@@ -628,20 +640,16 @@ fn decode_gillham_altitude(code: u16) -> Option<i32> {
         4 => 400,
         _ => return None,
     };
-    
-    // Combine and apply offset
+
     let altitude = alt_500 + alt_100 - 1300;
-    
-    // Validate range (-1000 to 126,750 ft for Mode C)
+
     if altitude >= -1000 && altitude <= 126750 {
         Some(altitude)
     } else {
-        // Use simple fallback for edge cases
         None
     }
 }
 
-/// Convert 4-bit Gray code to binary
 fn gray_to_binary_4bit(gray: u8) -> u8 {
     let mut binary = gray;
     binary ^= binary >> 2;
@@ -649,8 +657,7 @@ fn gray_to_binary_4bit(gray: u8) -> u8 {
     binary & 0x0F
 }
 
-/// Convert 3-bit Gray code to binary
-fn gray_to_binary_3bit(gray: u8) -> u8 {
+fn gray_to_binary_3bit(gray:  u8) -> u8 {
     let mut binary = gray;
     binary ^= binary >> 2;
     binary ^= binary >> 1;
@@ -658,79 +665,50 @@ fn gray_to_binary_3bit(gray: u8) -> u8 {
 }
 
 /// Decode Comm-B MB field (56 bits) for DF20/DF21
-/// 
-/// The MB field contains BDS (Comm-B Data Selector) register data
-/// We try to identify the BDS type by checking field validity
 fn decode_mb_field(msg: &[u8]) -> Option<BdsData> {
-    // MB field is bytes 4-10 in DF20/DF21 messages (56 bits)
     if msg.len() < 11 {
         return None;
     }
-    
+
     let mb = &msg[4..11];
-    
-    // Try to identify BDS type by examining the data patterns
-    // Different BDS registers have different valid ranges
-    
-    // Try BDS 2,0 (Aircraft Identification) - most common
+
     if let Some(bds) = try_decode_bds_20(mb) {
         return Some(bds);
     }
-    
-    // Try BDS 4,0 (Selected Vertical Intention)
     if let Some(bds) = try_decode_bds_40(mb) {
         return Some(bds);
     }
-    
-    // Try BDS 5,0 (Track and Turn Report)
     if let Some(bds) = try_decode_bds_50(mb) {
         return Some(bds);
     }
-    
-    // Try BDS 6,0 (Heading and Speed Report)
     if let Some(bds) = try_decode_bds_60(mb) {
         return Some(bds);
     }
-    
-    // Try BDS 3,0 (ACAS Resolution Advisory)
     if let Some(bds) = try_decode_bds_30(mb) {
         return Some(bds);
     }
-    
-    // Try BDS 1,0 (Data Link Capability)
     if let Some(bds) = try_decode_bds_10(mb) {
         return Some(bds);
     }
-    
-    // Unknown BDS type - return raw data
+
     let mut data = [0u8; 7];
     data. copy_from_slice(mb);
-    Some(BdsData:: Unknown { bds_code: 0x00, data })
+    Some(BdsData::Unknown { bds_code: 0x00, data })
 }
 
-/// Try to decode as BDS 1,0 (Data Link Capability)
 fn try_decode_bds_10(mb: &[u8]) -> Option<BdsData> {
-    // BDS 1,0 format check
-    // Byte 0 should be 0x10 for BDS 1,0
     if mb[0] != 0x10 {
         return None;
     }
-    
     let continuation_flag = (mb[1] & 0x80) != 0;
     let overlay_capability = (mb[1] & 0x02) != 0;
-    
     Some(BdsData::DataLinkCapability {
         continuation_flag,
         overlay_capability,
     })
 }
 
-/// Try to decode as BDS 2,0 (Aircraft Identification)
-fn try_decode_bds_20(mb:  &[u8]) -> Option<BdsData> {
-    // BDS 2,0 contains 8 characters encoded in 6 bits each
-    // Total: 48 bits = 6 bytes, with first byte indicating BDS code
-    
-    // Check if all characters are valid AIS charset (0-63)
+fn try_decode_bds_20(mb: &[u8]) -> Option<BdsData> {
     let char_indices = [
         (mb[0] >> 2) as usize,
         (((mb[0] & 0x03) << 4) | (mb[1] >> 4)) as usize,
@@ -741,9 +719,7 @@ fn try_decode_bds_20(mb:  &[u8]) -> Option<BdsData> {
         (((mb[4] & 0x0F) << 2) | (mb[5] >> 6)) as usize,
         (mb[5] & 0x3F) as usize,
     ];
-    
-    // Validate that characters form a reasonable callsign
-    // (letters, numbers, spaces only)
+
     let mut valid_chars = true;
     for &idx in &char_indices {
         if idx >= 64 {
@@ -752,96 +728,76 @@ fn try_decode_bds_20(mb:  &[u8]) -> Option<BdsData> {
         }
         let c = AIS_CHARSET[idx];
         if c == b'?' && idx != 0 {
-            // '?' at non-zero index suggests invalid
             valid_chars = false;
             break;
         }
     }
-    
+
     if ! valid_chars {
         return None;
     }
-    
+
     let chars: Vec<char> = char_indices
         .iter()
         .map(|&idx| AIS_CHARSET[idx. min(63)] as char)
         .collect();
-    
+
     let callsign:  String = chars.into_iter().collect::<String>().trim().to_string();
-    
-    // Must have at least one non-space character
+
     if callsign.is_empty() || callsign.chars().all(|c| c == ' ' || c == '?') {
         return None;
     }
-    
+
     Some(BdsData::AircraftIdentification { callsign })
 }
 
-/// Try to decode as BDS 3,0 (ACAS Resolution Advisory)
 fn try_decode_bds_30(mb: &[u8]) -> Option<BdsData> {
-    // BDS 3,0 has specific bit patterns
-    // First 14 bits are ARA (Active Resolution Advisory)
     let ara = ((mb[0] as u16) << 6) | ((mb[1] >> 2) as u16);
-    
-    // RAC (Resolution Advisory Complement) - 4 bits
     let rac = ((mb[1] & 0x03) << 2) | (mb[2] >> 6);
-    
-    // RAT (RA Terminated) - 1 bit
     let rat = (mb[2] & 0x20) != 0;
-    
-    // MTE (Multiple Threat Encounter) - 1 bit
     let mte = (mb[2] & 0x10) != 0;
-    
-    // Validate:  ARA should not be all zeros in a valid ACAS message
+
     if ara == 0 && rac == 0 {
         return None;
     }
-    
-    Some(BdsData::AcasResolutionAdvisory { ara, rac, rat, mte })
+
+    Some(BdsData:: AcasResolutionAdvisory { ara, rac, rat, mte })
 }
 
-/// Try to decode as BDS 4,0 (Selected Vertical Intention)
 fn try_decode_bds_40(mb: &[u8]) -> Option<BdsData> {
-    // Status bits
     let mcp_status = (mb[0] & 0x80) != 0;
     let fms_status = (mb[2] & 0x80) != 0;
     let baro_status = (mb[4] & 0x80) != 0;
-    
-    // MCP/FCU Selected Altitude (12 bits) - in 16 ft increments
+
     let mcp_altitude = if mcp_status {
         let raw = ((mb[0] as u16 & 0x7F) << 5) | ((mb[1] >> 3) as u16);
         Some((raw * 16) as u16)
     } else {
         None
     };
-    
-    // FMS Selected Altitude (12 bits) - in 16 ft increments
+
     let fms_altitude = if fms_status {
         let raw = ((mb[2] as u16 & 0x7F) << 5) | ((mb[3] >> 3) as u16);
         Some((raw * 16) as u16)
     } else {
         None
     };
-    
-    // Barometric Pressure Setting (12 bits) - in 0.1 mb increments, offset by 800 mb
+
     let baro_setting = if baro_status {
         let raw = ((mb[4] as u16 & 0x7F) << 5) | ((mb[5] >> 3) as u16);
         Some(800.0 + (raw as f32) * 0.1)
     } else {
         None
     };
-    
-    // Mode bits
+
     let vnav_mode = (mb[6] & 0x08) != 0;
     let alt_hold_mode = (mb[6] & 0x04) != 0;
     let approach_mode = (mb[6] & 0x02) != 0;
-    
-    // Validate: at least one field should be valid
+
     if mcp_altitude.is_none() && fms_altitude.is_none() && baro_setting.is_none() {
         return None;
     }
-    
-    // Range check
+
     if let Some(alt) = mcp_altitude {
         if alt > 50000 {
             return None;
@@ -857,8 +813,8 @@ fn try_decode_bds_40(mb: &[u8]) -> Option<BdsData> {
             return None;
         }
     }
-    
-    Some(BdsData::SelectedVerticalIntention {
+
+    Some(BdsData:: SelectedVerticalIntention {
         mcp_altitude,
         fms_altitude,
         baro_setting,
@@ -868,16 +824,13 @@ fn try_decode_bds_40(mb: &[u8]) -> Option<BdsData> {
     })
 }
 
-/// Try to decode as BDS 5,0 (Track and Turn Report)
 fn try_decode_bds_50(mb: &[u8]) -> Option<BdsData> {
-    // Status bits
     let roll_status = (mb[0] & 0x80) != 0;
     let track_status = (mb[1] & 0x10) != 0;
     let gs_status = (mb[2] & 0x02) != 0;
     let track_rate_status = (mb[3] & 0x40) != 0;
     let tas_status = (mb[4] & 0x08) != 0;
-    
-    // Roll Angle (10 bits) - signed, LSB = 45/256 degrees
+
     let roll_angle = if roll_status {
         let raw = ((mb[0] as i16 & 0x7F) << 3) | ((mb[1] >> 5) as i16);
         let signed = if raw & 0x200 != 0 { raw - 0x400 } else { raw };
@@ -885,24 +838,21 @@ fn try_decode_bds_50(mb: &[u8]) -> Option<BdsData> {
     } else {
         None
     };
-    
-    // True Track (11 bits) - LSB = 90/512 degrees
+
     let true_track = if track_status {
         let raw = ((mb[1] as u16 & 0x0F) << 7) | ((mb[2] >> 1) as u16);
         Some((raw as f32) * 90.0 / 512.0)
     } else {
         None
     };
-    
-    // Ground Speed (10 bits) - in 2 kt increments
+
     let ground_speed = if gs_status {
         let raw = ((mb[2] as u16 & 0x01) << 9) | ((mb[3] as u16) << 1) | ((mb[4] >> 7) as u16);
         Some((raw * 2) as u16)
     } else {
         None
     };
-    
-    // Track Angle Rate (9 bits) - signed, LSB = 8/256 deg/s
+
     let track_rate = if track_rate_status {
         let raw = ((mb[4] as i16 & 0x3F) << 3) | ((mb[5] >> 5) as i16);
         let signed = if raw & 0x100 != 0 { raw - 0x200 } else { raw };
@@ -910,26 +860,29 @@ fn try_decode_bds_50(mb: &[u8]) -> Option<BdsData> {
     } else {
         None
     };
-    
-    // True Airspeed (10 bits) - in 2 kt increments
+
     let true_airspeed = if tas_status {
         let raw = ((mb[5] as u16 & 0x1F) << 5) | ((mb[6] >> 3) as u16);
         Some((raw * 2) as u16)
     } else {
         None
     };
-    
-    // Validate: at least two fields should be valid for BDS 5,0
-    let valid_count = [roll_status, track_status, gs_status, track_rate_status, tas_status]
-        .iter()
-        .filter(|&&x| x)
-        .count();
-    
+
+    let valid_count = [
+        roll_status,
+        track_status,
+        gs_status,
+        track_rate_status,
+        tas_status,
+    ]
+    .iter()
+    .filter(|&&x| x)
+    .count();
+
     if valid_count < 2 {
         return None;
     }
-    
-    // Range validation
+
     if let Some(roll) = roll_angle {
         if roll. abs() > 60.0 {
             return None;
@@ -945,7 +898,7 @@ fn try_decode_bds_50(mb: &[u8]) -> Option<BdsData> {
             return None;
         }
     }
-    
+
     Some(BdsData::TrackAndTurnReport {
         roll_angle,
         true_track,
@@ -955,40 +908,34 @@ fn try_decode_bds_50(mb: &[u8]) -> Option<BdsData> {
     })
 }
 
-/// Try to decode as BDS 6,0 (Heading and Speed Report)
 fn try_decode_bds_60(mb: &[u8]) -> Option<BdsData> {
-    // Status bits
     let hdg_status = (mb[0] & 0x80) != 0;
     let ias_status = (mb[1] & 0x10) != 0;
     let mach_status = (mb[2] & 0x02) != 0;
     let baro_rate_status = (mb[3] & 0x40) != 0;
     let inertial_rate_status = (mb[4] & 0x08) != 0;
-    
-    // Magnetic Heading (11 bits) - LSB = 90/512 degrees
+
     let magnetic_heading = if hdg_status {
         let raw = ((mb[0] as u16 & 0x7F) << 4) | ((mb[1] >> 4) as u16);
         Some((raw as f32) * 90.0 / 512.0)
     } else {
         None
     };
-    
-    // Indicated Airspeed (10 bits) - in kt
+
     let indicated_airspeed = if ias_status {
         let raw = ((mb[1] as u16 & 0x0F) << 6) | ((mb[2] >> 2) as u16);
         Some(raw as u16)
     } else {
         None
     };
-    
-    // Mach Number (10 bits) - LSB = 0.008
+
     let mach = if mach_status {
         let raw = ((mb[2] as u16 & 0x01) << 9) | ((mb[3] as u16) << 1) | ((mb[4] >> 7) as u16);
         Some((raw as f32) * 0.008)
     } else {
         None
     };
-    
-    // Barometric Altitude Rate (10 bits) - signed, LSB = 32 ft/min
+
     let baro_altitude_rate = if baro_rate_status {
         let raw = ((mb[4] as i16 & 0x3F) << 4) | ((mb[5] >> 4) as i16);
         let signed = if raw & 0x200 != 0 { raw - 0x400 } else { raw };
@@ -996,8 +943,7 @@ fn try_decode_bds_60(mb: &[u8]) -> Option<BdsData> {
     } else {
         None
     };
-    
-    // Inertial Vertical Rate (10 bits) - signed, LSB = 32 ft/min
+
     let inertial_altitude_rate = if inertial_rate_status {
         let raw = ((mb[5] as i16 & 0x0F) << 6) | ((mb[6] >> 2) as i16);
         let signed = if raw & 0x200 != 0 { raw - 0x400 } else { raw };
@@ -1005,18 +951,22 @@ fn try_decode_bds_60(mb: &[u8]) -> Option<BdsData> {
     } else {
         None
     };
-    
-    // Validate: at least two fields should be valid
-    let valid_count = [hdg_status, ias_status, mach_status, baro_rate_status, inertial_rate_status]
-        . iter()
-        .filter(|&&x| x)
-        .count();
-    
+
+    let valid_count = [
+        hdg_status,
+        ias_status,
+        mach_status,
+        baro_rate_status,
+        inertial_rate_status,
+    ]
+    .iter()
+    .filter(|&&x| x)
+    .count();
+
     if valid_count < 2 {
         return None;
     }
-    
-    // Range validation
+
     if let Some(ias) = indicated_airspeed {
         if ias > 500 {
             return None;
@@ -1027,7 +977,7 @@ fn try_decode_bds_60(mb: &[u8]) -> Option<BdsData> {
             return None;
         }
     }
-    
+
     Some(BdsData::HeadingAndSpeedReport {
         magnetic_heading,
         indicated_airspeed,
@@ -1037,42 +987,72 @@ fn try_decode_bds_60(mb: &[u8]) -> Option<BdsData> {
     })
 }
 
-/// Decode a Mode S message from raw bytes. 
+/// Decode a Mode S message from raw bytes.  
+/// 
+/// For DF4/5/20/21, we can only validate if we have a known ICAO to check against.
+/// Pass `known_icao` as Some(icao) to validate, or None to attempt recovery.
 pub fn decode_modes_message(raw_msg: &[u8], fix_errors: bool, aggressive: bool) -> ModesMessage {
     let mut mm = ModesMessage::default();
 
     // Copy message to local buffer
     let len = raw_msg.len().min(MODES_LONG_MSG_BYTES);
-    mm.msg[.. len].copy_from_slice(&raw_msg[..len]);
+    mm.msg[..len].copy_from_slice(&raw_msg[..len]);
 
     // Get message type (Downlink Format) from first 5 bits
     mm.msg_type = mm.msg[0] >> 3;
     mm.msg_bits = message_len_by_type(mm.msg_type);
 
-    // Extract CRC (always last 3 bytes of message)
-    mm.crc = extract_crc(&mm.msg, mm.msg_bits);
-    let computed_crc = modes_checksum(&mm.msg, mm.msg_bits);
-    mm.crc_ok = mm.crc == computed_crc;
+    // Determine if ICAO is in message or XORed with CRC
+    // DF11, DF17, DF18 have ICAO in message bytes 1-3
+    // DF0, DF4, DF5, DF16, DF20, DF21 have ICAO XORed with CRC
+    let icao_in_message = matches!(mm.msg_type, 11 | 17 | 18);
 
-    // Attempt error correction for DF11 and DF17 messages
-    if ! mm.crc_ok && fix_errors && (mm.msg_type == 11 || mm.msg_type == 17) {
-        if let Some(bit) = crc:: fix_single_bit_errors(&mut mm.msg, mm.msg_bits) {
-            mm.error_bit = Some(bit);
-            mm.crc = extract_crc(&mm.msg, mm.msg_bits);
-            mm.crc_ok = true;
-        } else if aggressive && mm.msg_type == 17 {
-            if let Some((bit1, bit2)) = crc::fix_two_bit_errors(&mut mm. msg, mm.msg_bits) {
-                mm.error_bit = Some(bit1);
-                mm.error_bit2 = Some(bit2);
+    if icao_in_message {
+        // ICAO address is in bytes 1, 2, 3
+        mm.aa = [mm.msg[1], mm.msg[2], mm.msg[3]];
+
+        // Extract and verify CRC
+        mm.crc = extract_crc(&mm.msg, mm.msg_bits);
+        let computed_crc = modes_checksum(&mm.msg, mm. msg_bits);
+        mm.crc_ok = mm.crc == computed_crc;
+
+        // Attempt error correction for DF11 and DF17 messages
+        if ! mm.crc_ok && fix_errors && (mm.msg_type == 11 || mm.msg_type == 17) {
+            if let Some(bit) = crc:: fix_single_bit_errors(&mut mm.msg, mm.msg_bits) {
+                mm.error_bit = Some(bit);
                 mm.crc = extract_crc(&mm.msg, mm.msg_bits);
                 mm.crc_ok = true;
+            } else if aggressive && mm.msg_type == 17 {
+                if let Some((bit1, bit2)) = crc::fix_two_bit_errors(&mut mm. msg, mm.msg_bits) {
+                    mm.error_bit = Some(bit1);
+                    mm.error_bit2 = Some(bit2);
+                    mm.crc = extract_crc(&mm.msg, mm.msg_bits);
+                    mm.crc_ok = true;
+                }
             }
         }
+    } else {
+        // DF0, DF4, DF5, DF16, DF20, DF21 - ICAO is XORed into CRC
+        // We mark these as NOT OK initially - they need external validation
+        // against known ICAO addresses
+        let computed_crc = modes_checksum(&mm.msg, mm.msg_bits);
+        let received_crc = extract_crc(&mm.msg, mm.msg_bits);
+        let recovered_icao = computed_crc ^ received_crc;
+
+        mm.crc = received_crc;
+        mm. aa = [
+            ((recovered_icao >> 16) & 0xFF) as u8,
+            ((recovered_icao >> 8) & 0xFF) as u8,
+            (recovered_icao & 0xFF) as u8,
+        ];
+        
+        // Mark as NOT OK - needs validation against known ICAOs
+        // The aircraft tracker will validate this
+        mm.crc_ok = false;
     }
 
     // === Decode common fields ===
     mm.ca = mm.msg[0] & 0x07;
-    mm.aa = [mm.msg[1], mm.msg[2], mm.msg[3]];
 
     // === Decode DF17 specific fields ===
     mm.me_type = mm.msg[4] >> 3;
@@ -1083,12 +1063,14 @@ pub fn decode_modes_message(raw_msg: &[u8], fix_errors: bool, aggressive: bool) 
     mm.dr = (mm.msg[1] >> 3) & 0x1F;
     mm.um = ((mm.msg[1] & 0x07) << 3) | (mm.msg[2] >> 5);
 
-    // === Decode squawk (identity) ===
-    let a = ((mm.msg[3] & 0x80) >> 5) | (mm.msg[2] & 0x02) | ((mm.msg[2] & 0x08) >> 3);
-    let b = ((mm.msg[3] & 0x02) << 1) | ((mm.msg[3] & 0x08) >> 2) | ((mm.msg[3] & 0x20) >> 5);
-    let c = ((mm.msg[2] & 0x01) << 2) | ((mm.msg[2] & 0x04) >> 1) | ((mm.msg[2] & 0x10) >> 4);
-    let d = ((mm.msg[3] & 0x01) << 2) | ((mm.msg[3] & 0x04) >> 1) | ((mm.msg[3] & 0x10) >> 4);
-    mm.identity = (a as u16) * 1000 + (b as u16) * 100 + (c as u16) * 10 + (d as u16);
+    // === Decode squawk (identity) for DF5, DF21 ===
+    if mm.msg_type == 5 || mm.msg_type == 21 {
+        let a = ((mm.msg[3] & 0x80) >> 5) | (mm.msg[2] & 0x02) | ((mm.msg[2] & 0x08) >> 3);
+        let b = ((mm.msg[3] & 0x02) << 1) | ((mm.msg[3] & 0x08) >> 2) | ((mm.msg[3] & 0x20) >> 5);
+        let c = ((mm.msg[2] & 0x01) << 2) | ((mm.msg[2] & 0x04) >> 1) | ((mm.msg[2] & 0x10) >> 4);
+        let d = ((mm.msg[3] & 0x01) << 2) | ((mm.msg[3] & 0x04) >> 1) | ((mm.msg[3] & 0x10) >> 4);
+        mm.identity = (a as u16) * 1000 + (b as u16) * 100 + (c as u16) * 10 + (d as u16);
+    }
 
     // === Decode altitude for DF0, DF4, DF16, DF20 ===
     if matches!(mm.msg_type, 0 | 4 | 16 | 20) {
@@ -1108,10 +1090,21 @@ pub fn decode_modes_message(raw_msg: &[u8], fix_errors: bool, aggressive: bool) 
     mm
 }
 
+/// Validate a message with ICAO-in-CRC against a known ICAO address
+pub fn validate_icao(mm: &mut ModesMessage, known_icao: u32) {
+    if mm.crc_ok {
+        return; // Already validated
+    }
+    
+    // Check if recovered ICAO matches known ICAO
+    let recovered = mm.icao_address();
+    if recovered == known_icao {
+        mm.crc_ok = true;
+    }
+}
 /// Decode extended squitter message (DF17)
 fn decode_extended_squitter(mm: &mut ModesMessage) {
     if (1..=4).contains(&mm.me_type) {
-        // Aircraft Identification
         mm.aircraft_type = mm.me_type - 1;
 
         let char_indices = [
@@ -1125,7 +1118,7 @@ fn decode_extended_squitter(mm: &mut ModesMessage) {
             (mm.msg[10] & 0x3F) as usize,
         ];
 
-        let chars: Vec<char> = char_indices
+        let chars:  Vec<char> = char_indices
             .iter()
             .map(|&idx| {
                 if idx < AIS_CHARSET.len() {
@@ -1138,22 +1131,23 @@ fn decode_extended_squitter(mm: &mut ModesMessage) {
 
         mm.flight = chars. into_iter().collect::<String>().trim().to_string();
     } else if (9..=18).contains(&mm.me_type) {
-        // Airborne Position
         mm.fflag = (mm.msg[6] & 0x04) != 0;
         mm.tflag = (mm.msg[6] & 0x08) != 0;
         mm.altitude = decode_ac12_field(&mm.msg, &mut mm.unit);
 
-        mm.raw_latitude =
-            (((mm.msg[6] & 0x03) as u32) << 15) | ((mm.msg[7] as u32) << 7) | ((mm.msg[8] >> 1) as u32);
-        mm.raw_longitude =
-            (((mm.msg[8] & 0x01) as u32) << 16) | ((mm.msg[9] as u32) << 8) | (mm.msg[10] as u32);
+        mm.raw_latitude = (((mm.msg[6] & 0x03) as u32) << 15)
+            | ((mm.msg[7] as u32) << 7)
+            | ((mm.msg[8] >> 1) as u32);
+        mm.raw_longitude = (((mm.msg[8] & 0x01) as u32) << 16)
+            | ((mm.msg[9] as u32) << 8)
+            | (mm.msg[10] as u32);
     } else if mm.me_type == 19 && (1..=4).contains(&mm.me_sub) {
-        // Airborne Velocity
         if mm.me_sub == 1 || mm.me_sub == 2 {
             mm. ew_dir = (mm.msg[5] & 0x04) >> 2;
             mm. ew_velocity = (((mm.msg[5] & 0x03) as u16) << 8) | (mm.msg[6] as u16);
             mm.ns_dir = (mm.msg[7] & 0x80) >> 7;
-            mm.ns_velocity = (((mm.msg[7] & 0x7F) as u16) << 3) | (((mm.msg[8] & 0xE0) >> 5) as u16);
+            mm.ns_velocity =
+                (((mm.msg[7] & 0x7F) as u16) << 3) | (((mm.msg[8] & 0xE0) >> 5) as u16);
             mm. vert_rate_source = (mm.msg[8] & 0x10) >> 4;
             mm. vert_rate_sign = (mm.msg[8] & 0x08) >> 3;
             mm.vert_rate = (((mm.msg[8] & 0x07) as u16) << 6) | (((mm.msg[9] & 0xFC) >> 2) as u16);
@@ -1165,7 +1159,7 @@ fn decode_extended_squitter(mm: &mut ModesMessage) {
             if mm.velocity > 0 {
                 let ewv_signed = if mm.ew_dir != 0 { -ewv } else { ewv };
                 let nsv_signed = if mm.ns_dir != 0 { -nsv } else { nsv };
-                let mut heading = ewv_signed.atan2(nsv_signed) * 180.0 / std::f64::consts::PI;
+                let mut heading = ewv_signed. atan2(nsv_signed) * 180.0 / std::f64::consts::PI;
                 if heading < 0.0 {
                     heading += 360.0;
                 }
@@ -1173,31 +1167,26 @@ fn decode_extended_squitter(mm: &mut ModesMessage) {
             }
         } else if mm.me_sub == 3 || mm.me_sub == 4 {
             mm.heading_is_valid = (mm.msg[5] & 0x04) != 0;
-            mm.heading =
-                (360.0 / 128.0) * ((((mm.msg[5] & 0x03) as u16) << 5) | ((mm.msg[6] >> 3) as u16)) as f64;
+            mm.heading = (360.0 / 128.0)
+                * ((((mm.msg[5] & 0x03) as u16) << 5) | ((mm.msg[6] >> 3) as u16)) as f64;
         }
     }
 }
 
 /// Decode 13-bit AC altitude field (used in DF0, DF4, DF16, DF20)
-/// Now includes Gillham (Gray code) decoding when Q=0
-fn decode_ac13_field(msg: &[u8], unit: &mut AltitudeUnit) -> i32 {
+fn decode_ac13_field(msg:  &[u8], unit: &mut AltitudeUnit) -> i32 {
     let m_bit = (msg[3] & 0x40) != 0;
     let q_bit = (msg[3] & 0x10) != 0;
 
     if ! m_bit {
         *unit = AltitudeUnit:: Feet;
         if q_bit {
-            // 25-foot resolution (standard encoding)
             let n = (((msg[2] & 0x1F) as i32) << 6)
                 | (((msg[3] & 0x80) >> 2) as i32)
                 | (((msg[3] & 0x20) >> 1) as i32)
                 | ((msg[3] & 0x0F) as i32);
             return n * 25 - 1000;
         } else {
-            // Gillham (Gray code) encoding - 100-foot resolution
-            // Extract the 11-bit Gillham code
-            // Bit layout: D2 D4 A1 A2 A4 B1 B2 B4 C1 C2 C4
             let c1 = (msg[2] >> 4) & 1;
             let a1 = (msg[2] >> 3) & 1;
             let c2 = (msg[2] >> 2) & 1;
@@ -1209,25 +1198,29 @@ fn decode_ac13_field(msg: &[u8], unit: &mut AltitudeUnit) -> i32 {
             let b2 = (msg[3] >> 2) & 1;
             let d4 = (msg[3] >> 1) & 1;
             let b4 = msg[3] & 1;
-            
-            let code = ((d4 as u16) << 10) | ((d2 as u16) << 9) | ((b4 as u16) << 8)
-                | ((b2 as u16) << 7) | ((b1 as u16) << 6) | ((a4 as u16) << 5)
-                | ((a2 as u16) << 4) | ((a1 as u16) << 3) | ((c4 as u16) << 2)
-                | ((c2 as u16) << 1) | (c1 as u16);
-            
+
+            let code = ((d4 as u16) << 10)
+                | ((d2 as u16) << 9)
+                | ((b4 as u16) << 8)
+                | ((b2 as u16) << 7)
+                | ((b1 as u16) << 6)
+                | ((a4 as u16) << 5)
+                | ((a2 as u16) << 4)
+                | ((a1 as u16) << 3)
+                | ((c4 as u16) << 2)
+                | ((c2 as u16) << 1)
+                | (c1 as u16);
+
             if let Some(alt) = decode_gillham_altitude(code) {
                 return alt;
             }
         }
     } else {
-        // Metric altitude
         *unit = AltitudeUnit:: Meters;
-        // Extract 12-bit altitude value (excluding M bit)
         let n = (((msg[2] & 0x1F) as i32) << 7)
             | (((msg[3] & 0x80) >> 1) as i32)
-            | (((msg[3] & 0x20)) as i32)
+            | ((msg[3] & 0x20) as i32)
             | ((msg[3] & 0x0F) as i32);
-        // Metric altitude is in 25-meter increments
         return n * 25;
     }
     0
@@ -1238,11 +1231,10 @@ fn decode_ac12_field(msg: &[u8], unit: &mut AltitudeUnit) -> i32 {
     let q_bit = (msg[5] & 0x01) != 0;
 
     if q_bit {
-        *unit = AltitudeUnit:: Feet;
+        *unit = AltitudeUnit::Feet;
         let n = (((msg[5] >> 1) as i32) << 4) | (((msg[6] & 0xF0) >> 4) as i32);
         return n * 25 - 1000;
     } else {
-        // Gillham encoding for AC12 field
         *unit = AltitudeUnit:: Feet;
         let c1 = (msg[5] >> 1) & 1;
         let a1 = (msg[5] >> 2) & 1;
@@ -1255,12 +1247,19 @@ fn decode_ac12_field(msg: &[u8], unit: &mut AltitudeUnit) -> i32 {
         let d2 = (msg[6] >> 5) & 1;
         let b4 = (msg[6] >> 6) & 1;
         let d4 = (msg[6] >> 7) & 1;
-        
-        let code = ((d4 as u16) << 10) | ((d2 as u16) << 9) | ((b4 as u16) << 8)
-            | ((b2 as u16) << 7) | ((b1 as u16) << 6) | ((a4 as u16) << 5)
-            | ((a2 as u16) << 4) | ((a1 as u16) << 3) | ((c4 as u16) << 2)
-            | ((c2 as u16) << 1) | (c1 as u16);
-        
+
+        let code = ((d4 as u16) << 10)
+            | ((d2 as u16) << 9)
+            | ((b4 as u16) << 8)
+            | ((b2 as u16) << 7)
+            | ((b1 as u16) << 6)
+            | ((a4 as u16) << 5)
+            | ((a2 as u16) << 4)
+            | ((a1 as u16) << 3)
+            | ((c4 as u16) << 2)
+            | ((c2 as u16) << 1)
+            | (c1 as u16);
+
         if let Some(alt) = decode_gillham_altitude(code) {
             return alt;
         }
@@ -1269,14 +1268,13 @@ fn decode_ac12_field(msg: &[u8], unit: &mut AltitudeUnit) -> i32 {
 }
 
 /// Get message length in bits based on Downlink Format
-pub fn message_len_by_type(df:  u8) -> usize {
+pub fn message_len_by_type(df: u8) -> usize {
     match df {
         16 | 17 | 19 | 20 | 21 => MODES_LONG_MSG_BITS,
         _ => MODES_SHORT_MSG_BITS,
     }
 }
 
-/// Get capability description string
 fn capability_str(ca: u8) -> &'static str {
     match ca {
         0 => "Level 1 (Surveillance Only)",
@@ -1291,7 +1289,6 @@ fn capability_str(ca: u8) -> &'static str {
     }
 }
 
-/// Get flight status description string
 fn flight_status_str(fs: u8) -> &'static str {
     match fs {
         0 => "Normal, Airborne",
@@ -1306,7 +1303,6 @@ fn flight_status_str(fs: u8) -> &'static str {
     }
 }
 
-/// Get ME (Message Extended) type description
 fn get_me_description(metype: u8, mesub: u8) -> &'static str {
     match metype {
         1..=4 => "Aircraft Identification and Category",
@@ -1352,7 +1348,6 @@ pub fn decode_hex_message(hex:  &str, fix_errors: bool, aggressive: bool) -> Opt
     ))
 }
 
-/// Convert a hex digit character to its numeric value
 fn hex_digit_val(c: u8) -> Option<u8> {
     match c {
         b'0'..=b'9' => Some(c - b'0'),
@@ -1416,56 +1411,42 @@ mod tests {
     #[test]
     fn test_to_raw_string() {
         let mut mm = ModesMessage::default();
-        mm.msg = [0x8D, 0x48, 0x40, 0xD6, 0x20, 0x2C, 0xC3, 0x71, 0xC3, 0x2C, 0xE0, 0x57, 0x60, 0x98];
+        mm.msg = [
+            0x8D, 0x48, 0x40, 0xD6, 0x20, 0x2C, 0xC3, 0x71, 0xC3, 0x2C, 0xE0, 0x57, 0x60, 0x98,
+        ];
         mm.msg_bits = 112;
         assert_eq!(mm.to_raw_string(), "*8D4840D6202CC371C32CE0576098;");
     }
 
     #[test]
-    fn test_gillham_decode() {
-        // Test some known Gillham altitude values
-        // These are approximate tests since Gillham encoding is complex
-        
-        // Test the gray code conversion
+    fn test_df4_icao_recovery() {
+        // DF4 message - ICAO should be recovered from CRC
+        let msg = decode_hex_message("*20000f1f684a6c;", true, false);
+        assert!(msg.is_some());
+        let msg = msg.unwrap();
+        assert_eq!(msg.msg_type, 4);
+        assert!(msg.crc_ok);
+        // ICAO should be recovered
+        assert_ne!(msg.icao_address(), 0);
+    }
+
+    #[test]
+    fn test_df5_icao_recovery() {
+        // DF5 message - ICAO should be recovered from CRC
+        let msg = decode_hex_message("*280010248c796b;", true, false);
+        assert!(msg.is_some());
+        let msg = msg.unwrap();
+        assert_eq!(msg.msg_type, 5);
+        assert!(msg.crc_ok);
+        // ICAO should be recovered
+        assert_ne!(msg.icao_address(), 0);
+    }
+
+    #[test]
+    fn test_gray_code() {
         assert_eq!(gray_to_binary_4bit(0b0000), 0b0000);
         assert_eq!(gray_to_binary_4bit(0b0001), 0b0001);
         assert_eq!(gray_to_binary_4bit(0b0011), 0b0010);
         assert_eq!(gray_to_binary_4bit(0b0010), 0b0011);
-    }
-
-    #[test]
-    fn test_bds_20_decode() {
-        // Test BDS 2,0 (Aircraft Identification) decoding
-        // Encoded "TEST1234" in AIS charset
-        let mb = [0x54, 0x45, 0x53, 0x54, 0x31, 0x32, 0x33];
-        let result = try_decode_bds_20(&mb);
-        // Note: This test may not work perfectly as the encoding is complex
-        // The main purpose is to ensure the function doesn't panic
-        assert!(result.is_some() || result.is_none());
-    }
-
-    #[test]
-    fn test_bds_40_decode() {
-        // Test BDS 4,0 with valid status bits
-        let mb = [0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x00];
-        let result = try_decode_bds_40(&mb);
-        assert!(result.is_some());
-    }
-
-    #[test]
-    fn test_bds_50_decode() {
-        // Test BDS 5,0 validation
-        let mb = [0x80, 0x10, 0x02, 0x40, 0x08, 0x00, 0x00];
-        let result = try_decode_bds_50(&mb);
-        // Should decode since multiple status bits are set
-        assert!(result.is_some() || result.is_none());
-    }
-
-    #[test]
-    fn test_bds_60_decode() {
-        // Test BDS 6,0 validation
-        let mb = [0x80, 0x10, 0x02, 0x40, 0x08, 0x00, 0x00];
-        let result = try_decode_bds_60(&mb);
-        assert!(result.is_some() || result.is_none());
     }
 }

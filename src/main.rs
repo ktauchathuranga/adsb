@@ -1,7 +1,6 @@
-//! dump1090-rs:  A Mode S decoder for RTL-SDR devices
-//!
-//! Rust port of antirez/dump1090
+//!  dump1090-rs:  A Mode S decoder for RTL-SDR devices
 //! 
+//!  Rust port of antirez/dump1090
 
 #![allow(dead_code)]
 
@@ -18,14 +17,14 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{bounded, Receiver, Sender};
-use parking_lot:: RwLock;
+use parking_lot::RwLock;
 use tracing::{error, info, Level};
 use tracing_subscriber:: FmtSubscriber;
 
-use crate::aircraft:: AircraftStore;
-use crate::config::Config;
+use crate::aircraft::AircraftStore;
+use crate::config:: Config;
 use crate::decoder::ModesMessage;
-use crate:: demodulator::Demodulator;
+use crate::demodulator:: Demodulator;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::from_args();
@@ -35,19 +34,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let subscriber = FmtSubscriber:: builder()
             .with_max_level(Level::INFO)
             .finish();
-        tracing::subscriber::set_global_default(subscriber).ok();
+        tracing::subscriber:: set_global_default(subscriber).ok();
         info!("dump1090-rs starting...");
-                info!("Configuration: {:?}", config);
+        info!("Configuration: {:?}", config);
     }
 
     // Shared aircraft store
-    let aircraft_store = Arc:: new(RwLock::new(AircraftStore::new(config.interactive_ttl)));
+    let aircraft_store = Arc::new(RwLock::new(AircraftStore:: new(config.interactive_ttl)));
 
     // Channel for decoded messages
     let (msg_tx, msg_rx): (Sender<ModesMessage>, Receiver<ModesMessage>) = bounded(1024);
 
     // Start the runtime
-    let rt = tokio::runtime::Runtime:: new()?;
+    let rt = tokio::runtime::Runtime::new()?;
 
     rt.block_on(async {
         // Start network services if enabled
@@ -85,16 +84,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Data acquisition and demodulation
         if ! config.net_only {
             run_demodulation(&config, msg_tx).await;
-        } else {
-            if config.interactive {
-                // In interactive + net-only mode, just wait
-                loop {
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                }
-            } else {
-                info!("Net-only mode, waiting for data from network clients");
-                tokio::signal::ctrl_c().await.ok();
-            }
+        }
+
+        // After file processing, keep running if interactive or net mode
+        if config.interactive {
+            // Show final state and wait for Ctrl+C
+            println!("\nFile processing complete. Press Ctrl+C to exit...");
+            tokio::signal::ctrl_c().await.ok();
+        } else if config.net_only {
+            info!("Net-only mode, waiting for data from network clients");
+            tokio::signal::ctrl_c().await.ok();
         }
 
         // Cleanup
@@ -111,14 +110,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn run_demodulation(config: &Config, msg_tx: Sender<ModesMessage>) {
-    let demodulator = Demodulator::new(config. clone());
+    let demodulator = Demodulator:: new(config. clone());
 
     if let Some(ref filename) = config.filename {
         if ! config.interactive {
             info!("Reading from file: {}", filename);
         }
         if let Err(e) = demodulator.process_file(filename, &msg_tx) {
-            error!("Error processing file: {}", e);
+            if ! config.interactive {
+                error!("Error processing file: {}", e);
+            }
         }
     } else {
         // Try to use rtl_sdr command
@@ -140,7 +141,7 @@ async fn run_rtlsdr_command(
     msg_tx: &Sender<ModesMessage>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use std::process:: Stdio;
-    use tokio::io::AsyncReadExt;
+    use tokio::io:: AsyncReadExt;
     use tokio::process::Command;
 
     let demodulator = Demodulator:: new(config.clone());
@@ -153,7 +154,7 @@ async fn run_rtlsdr_command(
         .arg("2000000")
         .arg("-g")
         .arg(if config.gain < 0 {
-            "0".to_string()
+            "0". to_string()
         } else {
             (config.gain / 10).to_string()
         })
@@ -170,14 +171,17 @@ async fn run_rtlsdr_command(
 
     loop {
         let overlap = (8 + 112 - 1) * 4;
-        data.copy_within(read_size..read_size + overlap, 0);
+        data. copy_within(read_size.. read_size + overlap, 0);
 
         let mut total_read = 0;
         while total_read < read_size {
-            match stdout.read(&mut data[overlap + total_read..overlap + read_size]).await {
+            match stdout
+                .read(&mut data[overlap + total_read..overlap + read_size])
+                .await
+            {
                 Ok(0) => return Ok(()), // EOF
                 Ok(n) => total_read += n,
-                Err(e) => return Err(e.into()),
+                Err(e) => return Err(e. into()),
             }
         }
 
@@ -189,7 +193,7 @@ async fn run_rtlsdr_command(
 }
 
 async fn process_messages(
-    rx: Receiver<ModesMessage>,
+    rx:  Receiver<ModesMessage>,
     store: Arc<RwLock<AircraftStore>>,
     config: Config,
 ) {
@@ -214,101 +218,96 @@ async fn process_messages(
 }
 
 async fn interactive_display(store: Arc<RwLock<AircraftStore>>, max_rows: usize, metric:  bool) {
-    let mut last_update = Instant::now();
     let refresh_interval = Duration::from_millis(250);
 
     loop {
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        tokio::time::sleep(refresh_interval).await;
 
-        if last_update.elapsed() >= refresh_interval {
-            last_update = Instant::now();
+        // Clear screen and move cursor to top
+        print!("\x1B[2J\x1B[H");
 
-            // Clear screen and move cursor to top
-            print!("\x1B[2J\x1B[H");
+        // Print header
+        println!(
+            "\x1B[1m{: <6} {:<8} {: >9} {:>7} {:>10} {:>11} {:>5} {:>9} {:>6}\x1B[0m",
+            "Hex", "Flight", "Altitude", "Speed", "Lat", "Lon", "Track", "Messages", "Seen"
+        );
+        println!("{}", "-".repeat(80));
 
-            // Print header
+        // Get aircraft data
+        let store = store.read();
+        let now = Instant::now();
+
+        let mut aircraft:  Vec<_> = store.all().collect();
+        // Sort by most recently seen
+        aircraft.sort_by(|a, b| b.seen.cmp(&a.seen));
+
+        let mut count = 0;
+        for ac in aircraft. iter().take(max_rows) {
+            let seen_secs = now.duration_since(ac.seen).as_secs();
+
+            let (altitude, speed) = if metric {
+                (
+                    (ac.altitude as f64 / 3.2808) as i32,
+                    (ac.speed as f64 * 1.852) as u16,
+                )
+            } else {
+                (ac.altitude, ac.speed)
+            };
+
+            let alt_str = if altitude != 0 {
+                format! ("{}", altitude)
+            } else {
+                String::new()
+            };
+
+            let speed_str = if speed != 0 {
+                format!("{}", speed)
+            } else {
+                String::new()
+            };
+
+            let lat_str = if ac.lat != 0.0 {
+                format!("{:.4}", ac.lat)
+            } else {
+                String::new()
+            };
+
+            let lon_str = if ac.lon != 0.0 {
+                format!("{:.4}", ac.lon)
+            } else {
+                String::new()
+            };
+
+            let track_str = if ac.track != 0 {
+                format!("{}", ac.track)
+            } else {
+                String::new()
+            };
+
             println!(
-                "\x1B[1m{: <6} {: <8} {: >9} {:>7} {:>10} {:>11} {:>5} {:>9} {:>6}\x1B[0m",
-                "Hex", "Flight", "Altitude", "Speed", "Lat", "Lon", "Track", "Messages", "Seen"
-            );
-            println!("{}", "-".repeat(80));
-
-            // Get aircraft data
-            let store = store.read();
-            let now = Instant::now();
-
-            let mut aircraft:  Vec<_> = store.all().collect();
-            // Sort by most recently seen
-            aircraft.sort_by(|a, b| b.seen.cmp(&a.seen));
-
-            let mut count = 0;
-            for ac in aircraft.iter().take(max_rows) {
-                let seen_secs = now.duration_since(ac.seen).as_secs();
-
-                let (altitude, speed) = if metric {
-                    (
-                        (ac.altitude as f64 / 3.2808) as i32,
-                        (ac.speed as f64 * 1.852) as u16,
-                    )
-                } else {
-                    (ac. altitude, ac.speed)
-                };
-
-                let alt_str = if altitude != 0 {
-                    format!("{}", altitude)
-                } else {
-                    String::new()
-                };
-
-                let speed_str = if speed != 0 {
-                    format!("{}", speed)
-                } else {
-                    String::new()
-                };
-
-                let lat_str = if ac.lat != 0.0 {
-                    format! ("{:.4}", ac.lat)
-                } else {
-                    String:: new()
-                };
-
-                let lon_str = if ac.lon != 0.0 {
-                    format!("{:.4}", ac.lon)
-                } else {
-                    String::new()
-                };
-
-                let track_str = if ac.track != 0 {
-                    format! ("{}", ac.track)
-                } else {
-                    String:: new()
-                };
-
-                println!(
-                    "{: <6} {:<8} {: >9} {:>7} {: >10} {:>11} {: >5} {:>9} {: >4}s",
-                    ac.hex_addr,
-                    ac.flight,
-                    alt_str,
-                    speed_str,
-                    lat_str,
-                    lon_str,
-                    track_str,
-                    ac.messages,
-                    seen_secs
-                );
-
-                count += 1;
-            }
-
-            // Print footer
-            println! ("{}", "-".repeat(80));
-            println!(
-                "Aircraft:  {} | {} mode | Press Ctrl+C to exit",
-                count,
-                if metric { "Metric" } else { "Imperial" }
+                "{: <6} {:<8} {:>9} {:>7} {:>10} {:>11} {:>5} {:>9} {:>4}s",
+                ac.hex_addr,
+                ac.flight,
+                alt_str,
+                speed_str,
+                lat_str,
+                lon_str,
+                track_str,
+                ac.messages,
+                seen_secs
             );
 
-            io::stdout().flush().ok();
+            count += 1;
         }
+
+        // Print footer
+        println! ("{}", "-".repeat(80));
+        println!(
+            "Aircraft:  {} | {} mode | Press Ctrl+C to exit",
+            count,
+            if metric { "Metric" } else { "Imperial" }
+        );
+
+        io::stdout().flush().ok();
     }
 }

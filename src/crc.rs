@@ -87,6 +87,19 @@ pub fn extract_crc(msg: &[u8], bits: usize) -> u32 {
     (msg[len - 1] as u32)
 }
 
+pub fn recover_icao_from_crc(msg: &[u8], bits: usize) -> u32 {
+    let crc = modes_checksum(msg, bits);
+    let received = extract_crc(msg, bits);
+    crc ^ received
+}
+
+/// Check if an ICAO address is plausible
+/// ICAO addresses are 24-bit values assigned to aircraft
+fn is_valid_icao(icao: u32) -> bool {
+    // ICAO addresses are 24-bit, non-zero
+    icao != 0 && icao < 0x1000000
+}
+
 /// Attempt to fix single-bit errors using the CRC.
 ///
 /// # Algorithm
