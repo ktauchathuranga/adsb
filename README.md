@@ -42,7 +42,7 @@ ADS-B (Automatic Dependent Surveillance-Broadcast) is a surveillance technology 
 ┌─────────────┐     1090 MHz      ┌─────────────┐     USB      ┌─────────────┐
 │  Aircraft   │ ───────────────►  │  RTL-SDR    │ ──────────►  │  dump1090   │
 │  Transponder│    RF Signal      │  Dongle     │   I/Q Data   │  -rs        │
-└���────────────┘                   └─────────────┘              └─────────────┘
+└─────────────┘                   └─────────────┘              └─────────────┘
                                                                      │
                                                                      ▼
                                                          ┌─────────────────────┐
