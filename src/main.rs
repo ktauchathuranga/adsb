@@ -18,8 +18,8 @@ use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, Sender, bounded};
 use parking_lot::RwLock;
-use tracing::{Level, error, info};
-use tracing_subscriber::FmtSubscriber;
+use tracing::{Level, info, error};
+use tracing_subscriber:: FmtSubscriber;
 
 use crate::aircraft::AircraftStore;
 use crate::config::Config;

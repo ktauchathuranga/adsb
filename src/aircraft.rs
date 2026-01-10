@@ -554,7 +554,7 @@ mod tests {
 
     #[test]
     fn test_aircraft_store() {
-        let mut store = AircraftStore::new(60);
+        let store = AircraftStore::new(60);
         assert!(store.is_empty());
         assert_eq!(store.len(), 0);
     }
