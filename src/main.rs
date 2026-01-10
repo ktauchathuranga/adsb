@@ -1,6 +1,8 @@
-//!  dump1090-rs:  A Mode S decoder for RTL-SDR devices
-//!
+//!   dump1090-rs:   A Mode S decoder for RTL-SDR devices
+//! 
 //!  Rust port of antirez/dump1090
+//! 
+//! 
 
 #![allow(dead_code)]
 
@@ -13,7 +15,7 @@ mod magnitude;
 mod network;
 
 use std::io::{self, Write};
-use std::sync::Arc;
+use std::sync:: Arc;
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, Sender, bounded};
@@ -31,11 +33,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize logging only if not in interactive mode
     if !config.interactive {
-        let subscriber = FmtSubscriber::builder()
+        let subscriber = FmtSubscriber:: builder()
             .with_max_level(Level::INFO)
             .finish();
         tracing::subscriber::set_global_default(subscriber).ok();
-        info!("dump1090-rs starting...");
+        info!("dump1090-rs starting.. .");
         info!("Configuration: {:?}", config);
     }
 
@@ -81,15 +83,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             None
         };
 
+        // Stale aircraft removal task
+        let cleanup_handle = {
+            let store = Arc::clone(&aircraft_store);
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(1));
+                loop {
+                    interval.tick().await;
+                    let mut store = store.write();
+                    store.remove_stale();
+                }
+            })
+        };
+
         // Data acquisition and demodulation
-        if !config.net_only {
+        if ! config.net_only {
             run_demodulation(&config, msg_tx).await;
         }
 
         // After file processing, keep running if interactive or net mode
         if config.interactive {
             // Show final state and wait for Ctrl+C
-            println!("\nFile processing complete. Press Ctrl+C to exit...");
+            println!("\nFile processing complete. Press Ctrl+C to exit.. .");
             tokio::signal::ctrl_c().await.ok();
         } else if config.net_only {
             info!("Net-only mode, waiting for data from network clients");
@@ -97,6 +112,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // Cleanup
+        cleanup_handle.abort();
         if let Some(h) = net_handle {
             h.abort();
         }
@@ -109,22 +125,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn run_demodulation(config: &Config, msg_tx: Sender<ModesMessage>) {
-    let demodulator = Demodulator::new(config.clone());
+async fn run_demodulation(config: &Config, msg_tx:  Sender<ModesMessage>) {
+    let demodulator = Demodulator:: new(config. clone());
 
     if let Some(ref filename) = config.filename {
-        if !config.interactive {
+        if ! config.interactive {
             info!("Reading from file: {}", filename);
         }
         if let Err(e) = demodulator.process_file(filename, &msg_tx) {
-            if !config.interactive {
-                error!("Error processing file: {}", e);
+            if ! config.interactive {
+                error! ("Error processing file: {}", e);
             }
         }
     } else {
         // Try to use rtl_sdr command
-        if !config.interactive {
-            info!("Attempting to read from RTL-SDR using rtl_sdr command.. .");
+        if ! config.interactive {
+            info! ("Attempting to read from RTL-SDR using rtl_sdr command.. .");
         }
         if let Err(e) = run_rtlsdr_command(config, &msg_tx).await {
             error!("Error with RTL-SDR: {}", e);
@@ -140,21 +156,21 @@ async fn run_rtlsdr_command(
     config: &Config,
     msg_tx: &Sender<ModesMessage>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use std::process::Stdio;
+    use std::process:: Stdio;
     use tokio::io::AsyncReadExt;
     use tokio::process::Command;
 
-    let demodulator = Demodulator::new(config.clone());
+    let demodulator = Demodulator:: new(config.clone());
 
     // Build rtl_sdr command
     let mut cmd = Command::new("rtl_sdr");
     cmd.arg("-f")
-        .arg(config.freq.to_string())
+        .arg(config.freq. to_string())
         .arg("-s")
         .arg("2000000")
         .arg("-g")
         .arg(if config.gain < 0 {
-            "0".to_string()
+            "0". to_string()
         } else {
             (config.gain / 10).to_string()
         })
@@ -171,7 +187,7 @@ async fn run_rtlsdr_command(
 
     loop {
         let overlap = (8 + 112 - 1) * 4;
-        data.copy_within(read_size..read_size + overlap, 0);
+        data. copy_within(read_size..read_size + overlap, 0);
 
         let mut total_read = 0;
         while total_read < read_size {
@@ -181,7 +197,7 @@ async fn run_rtlsdr_command(
             {
                 Ok(0) => return Ok(()), // EOF
                 Ok(n) => total_read += n,
-                Err(e) => return Err(e.into()),
+                Err(e) => return Err(e. into()),
             }
         }
 
@@ -201,7 +217,7 @@ async fn process_messages(
 ) {
     while let Ok(msg) = rx.recv() {
         // Update aircraft tracking
-        if msg.crc_ok || !config.check_crc {
+        if msg.crc_ok || ! config.check_crc {
             let mut store = store.write();
             store.update_from_message(&msg);
         }
@@ -209,7 +225,7 @@ async fn process_messages(
         // Display in non-interactive mode
         if !config.interactive {
             if config.raw {
-                println!("{}", msg.to_raw_string());
+                println!("{}", msg. to_raw_string());
             } else if config.onlyaddr {
                 println!("{:06X}", msg.icao_address());
             } else {
@@ -219,7 +235,7 @@ async fn process_messages(
     }
 }
 
-async fn interactive_display(store: Arc<RwLock<AircraftStore>>, max_rows: usize, metric: bool) {
+async fn interactive_display(store: Arc<RwLock<AircraftStore>>, max_rows: usize, metric:  bool) {
     let refresh_interval = Duration::from_millis(250);
 
     loop {
@@ -230,20 +246,20 @@ async fn interactive_display(store: Arc<RwLock<AircraftStore>>, max_rows: usize,
 
         // Print header
         println!(
-            "\x1B[1m{: <6} {:<8} {: >9} {:>7} {:>10} {:>11} {:>5} {:>9} {:>6}\x1B[0m",
+            "\x1B[1m{: <6} {: <8} {: >9} {:>7} {:>10} {:>11} {:>5} {:>9} {:>6}\x1B[0m",
             "Hex", "Flight", "Altitude", "Speed", "Lat", "Lon", "Track", "Messages", "Seen"
         );
-        println!("{}", "-".repeat(80));
+        println! ("{}", "-".repeat(80));
 
         // Get aircraft data
         let store = store.read();
         let now = Instant::now();
 
-        let mut aircraft: Vec<_> = store.all().collect();
+        let mut aircraft:  Vec<_> = store.all().collect();
         // Sort by most recently seen
         aircraft.sort_by(|a, b| b.seen.cmp(&a.seen));
 
-        let mut count = 0;
+        let count = aircraft.len();
         for ac in aircraft.iter().take(max_rows) {
             let seen_secs = now.duration_since(ac.seen).as_secs();
 
@@ -257,7 +273,7 @@ async fn interactive_display(store: Arc<RwLock<AircraftStore>>, max_rows: usize,
             };
 
             let alt_str = if altitude != 0 {
-                format!("{}", altitude)
+                format! ("{}", altitude)
             } else {
                 String::new()
             };
@@ -287,7 +303,7 @@ async fn interactive_display(store: Arc<RwLock<AircraftStore>>, max_rows: usize,
             };
 
             println!(
-                "{: <6} {:<8} {:>9} {:>7} {:>10} {:>11} {:>5} {:>9} {:>4}s",
+                "{:<6} {:<8} {:>9} {: >7} {:>10} {: >11} {:>5} {: >9} {:>4}s",
                 ac.hex_addr,
                 ac.flight,
                 alt_str,
@@ -298,12 +314,10 @@ async fn interactive_display(store: Arc<RwLock<AircraftStore>>, max_rows: usize,
                 ac.messages,
                 seen_secs
             );
-
-            count += 1;
         }
 
         // Print footer
-        println!("{}", "-".repeat(80));
+        println! ("{}", "-".repeat(80));
         println!(
             "Aircraft:  {} | {} mode | Press Ctrl+C to exit",
             count,
