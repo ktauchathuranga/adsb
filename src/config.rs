@@ -95,7 +95,8 @@ impl Config {
                 }
                 "--gain" => {
                     i += 1;
-                    config.gain = args.get(i)
+                    config.gain = args
+                        .get(i)
                         .and_then(|s| s.parse::<f64>().ok())
                         .map(|g| (g * 10.0) as i32)
                         .unwrap_or(999999);
@@ -103,7 +104,10 @@ impl Config {
                 "--enable-agc" => config.enable_agc = true,
                 "--freq" => {
                     i += 1;
-                    config.freq = args.get(i).and_then(|s| s.parse().ok()).unwrap_or(1_090_000_000);
+                    config.freq = args
+                        .get(i)
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(1_090_000_000);
                 }
                 "--ifile" => {
                     i += 1;
@@ -140,7 +144,8 @@ impl Config {
                 "--interactive" => config.interactive = true,
                 "--interactive-rows" => {
                     i += 1;
-                    config.interactive_rows = args.get(i).and_then(|s| s.parse().ok()).unwrap_or(15);
+                    config.interactive_rows =
+                        args.get(i).and_then(|s| s.parse().ok()).unwrap_or(15);
                 }
                 "--interactive-ttl" => {
                     i += 1;
@@ -182,7 +187,8 @@ impl Config {
 }
 
 fn print_help() {
-    println!(r#"dump1090-rs - Mode S decoder for RTL-SDR devices
+    println!(
+        r#"dump1090-rs - Mode S decoder for RTL-SDR devices
 
 Usage: dump1090-rs [OPTIONS]
 
@@ -211,5 +217,6 @@ Options:
   --metric               Use metric units
   --debug <flags>        Debug mode (d/D/c/C/p/n/j)
   --help                 Show this help
-"#);
+"#
+    );
 }

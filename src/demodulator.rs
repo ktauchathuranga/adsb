@@ -1,17 +1,17 @@
 //! Mode S signal demodulation
 //!
-//!  Detects Mode S preambles and demodulates bit streams from magnitude data. 
+//!  Detects Mode S preambles and demodulates bit streams from magnitude data.
 
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufReader, Read};
 
-use crossbeam_channel:: Sender;
-use tracing:: debug;
+use crossbeam_channel::Sender;
+use tracing::debug;
 
 use crate::config::Config;
-use crate:: decoder::{self, ModesMessage, MODES_LONG_MSG_BITS};
-use crate::magnitude::{compute_magnitude_vector, MagnitudeLut};
+use crate::decoder::{self, MODES_LONG_MSG_BITS, ModesMessage};
+use crate::magnitude::{MagnitudeLut, compute_magnitude_vector};
 
 /// Preamble duration in microseconds
 const MODES_PREAMBLE_US: usize = 8;
@@ -22,7 +22,7 @@ const MODES_DATA_LEN: usize = 16 * 16384; // 256K
 
 /// Mode S demodulator
 pub struct Demodulator {
-    config:  Config,
+    config: Config,
     pub mag_lut: MagnitudeLut,
     /// Set of known ICAO addresses (from DF11/DF17 messages)
     known_icaos: HashSet<u32>,
@@ -42,20 +42,20 @@ impl Demodulator {
         let file: Box<dyn Read> = if filename == "-" {
             Box::new(std::io::stdin())
         } else {
-            Box:: new(File::open(filename)?)
+            Box::new(File::open(filename)?)
         };
 
         let mut reader = BufReader::with_capacity(MODES_DATA_LEN, file);
 
         let buffer_len = MODES_DATA_LEN + (MODES_FULL_LEN - 1) * 4;
         let mut data = vec![127u8; buffer_len];
-        
+
         // Track known ICAOs locally for this processing run
-        let mut known_icaos:  HashSet<u32> = HashSet::new();
+        let mut known_icaos: HashSet<u32> = HashSet::new();
 
         loop {
             let overlap = (MODES_FULL_LEN - 1) * 4;
-            data. copy_within(MODES_DATA_LEN.. MODES_DATA_LEN + overlap, 0);
+            data.copy_within(MODES_DATA_LEN..MODES_DATA_LEN + overlap, 0);
 
             let bytes_read = reader.read(&mut data[overlap..overlap + MODES_DATA_LEN])?;
 
@@ -63,7 +63,10 @@ impl Demodulator {
                 if self.config.loop_file && filename != "-" {
                     drop(reader);
                     if let Ok(file) = File::open(filename) {
-                        reader = BufReader::with_capacity(MODES_DATA_LEN, Box::new(file) as Box<dyn Read>);
+                        reader = BufReader::with_capacity(
+                            MODES_DATA_LEN,
+                            Box::new(file) as Box<dyn Read>,
+                        );
                         debug!("Looping file");
                         continue;
                     }
@@ -72,7 +75,7 @@ impl Demodulator {
             }
 
             if bytes_read < MODES_DATA_LEN {
-                data[overlap + bytes_read.. ]. fill(127);
+                data[overlap + bytes_read..].fill(127);
             }
 
             let magnitude = compute_magnitude_vector(&data[..overlap + bytes_read], &self.mag_lut);
@@ -102,7 +105,7 @@ impl Demodulator {
 
         let mut j = 0;
 
-        while j < mlen. saturating_sub(MODES_FULL_LEN * 2) {
+        while j < mlen.saturating_sub(MODES_FULL_LEN * 2) {
             // Check preamble pattern
             if !(m[j] > m[j + 1]
                 && m[j + 1] < m[j + 2]
@@ -120,7 +123,8 @@ impl Demodulator {
             }
 
             // Compute high threshold
-            let high = ((m[j] as u32 + m[j + 2] as u32 + m[j + 7] as u32 + m[j + 9] as u32) / 6) as u16;
+            let high =
+                ((m[j] as u32 + m[j + 2] as u32 + m[j + 7] as u32 + m[j + 9] as u32) / 6) as u16;
 
             // Check levels between spikes
             if m[j + 4] >= high || m[j + 5] >= high {
@@ -138,7 +142,7 @@ impl Demodulator {
             let mut bits = [0u8; MODES_LONG_MSG_BITS];
             let preamble_samples = MODES_PREAMBLE_US * 2;
 
-            for i in 0.. MODES_LONG_MSG_BITS {
+            for i in 0..MODES_LONG_MSG_BITS {
                 let idx = j + preamble_samples + i * 2;
                 if idx + 1 >= mlen {
                     break;
@@ -175,14 +179,14 @@ impl Demodulator {
 
             // Decode the message
             let mut mm = decoder::decode_modes_message(
-                &msg[.. msg_len],
-                self. config.fix_errors,
+                &msg[..msg_len],
+                self.config.fix_errors,
                 self.config.aggressive,
             );
 
             // For messages with ICAO in CRC, validate against known ICAOs
             let icao_in_message = matches!(mm.msg_type, 11 | 17 | 18);
-            
+
             if mm.crc_ok && icao_in_message {
                 // Valid message with explicit ICAO - add to known set
                 known_icaos.insert(mm.icao_address());

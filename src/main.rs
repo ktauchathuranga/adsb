@@ -1,5 +1,5 @@
 //!  dump1090-rs:  A Mode S decoder for RTL-SDR devices
-//! 
+//!
 //!  Rust port of antirez/dump1090
 
 #![allow(dead_code)]
@@ -16,31 +16,31 @@ use std::io::{self, Write};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crossbeam_channel::{bounded, Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, bounded};
 use parking_lot::RwLock;
-use tracing::{error, info, Level};
-use tracing_subscriber:: FmtSubscriber;
+use tracing::{Level, error, info};
+use tracing_subscriber::FmtSubscriber;
 
 use crate::aircraft::AircraftStore;
-use crate::config:: Config;
+use crate::config::Config;
 use crate::decoder::ModesMessage;
-use crate::demodulator:: Demodulator;
+use crate::demodulator::Demodulator;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::from_args();
 
     // Initialize logging only if not in interactive mode
     if !config.interactive {
-        let subscriber = FmtSubscriber:: builder()
+        let subscriber = FmtSubscriber::builder()
             .with_max_level(Level::INFO)
             .finish();
-        tracing::subscriber:: set_global_default(subscriber).ok();
+        tracing::subscriber::set_global_default(subscriber).ok();
         info!("dump1090-rs starting...");
         info!("Configuration: {:?}", config);
     }
 
     // Shared aircraft store
-    let aircraft_store = Arc::new(RwLock::new(AircraftStore:: new(config.interactive_ttl)));
+    let aircraft_store = Arc::new(RwLock::new(AircraftStore::new(config.interactive_ttl)));
 
     // Channel for decoded messages
     let (msg_tx, msg_rx): (Sender<ModesMessage>, Receiver<ModesMessage>) = bounded(1024);
@@ -82,7 +82,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         // Data acquisition and demodulation
-        if ! config.net_only {
+        if !config.net_only {
             run_demodulation(&config, msg_tx).await;
         }
 
@@ -110,20 +110,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn run_demodulation(config: &Config, msg_tx: Sender<ModesMessage>) {
-    let demodulator = Demodulator:: new(config. clone());
+    let demodulator = Demodulator::new(config.clone());
 
     if let Some(ref filename) = config.filename {
-        if ! config.interactive {
+        if !config.interactive {
             info!("Reading from file: {}", filename);
         }
         if let Err(e) = demodulator.process_file(filename, &msg_tx) {
-            if ! config.interactive {
+            if !config.interactive {
                 error!("Error processing file: {}", e);
             }
         }
     } else {
         // Try to use rtl_sdr command
-        if ! config.interactive {
+        if !config.interactive {
             info!("Attempting to read from RTL-SDR using rtl_sdr command.. .");
         }
         if let Err(e) = run_rtlsdr_command(config, &msg_tx).await {
@@ -140,21 +140,21 @@ async fn run_rtlsdr_command(
     config: &Config,
     msg_tx: &Sender<ModesMessage>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use std::process:: Stdio;
-    use tokio::io:: AsyncReadExt;
+    use std::process::Stdio;
+    use tokio::io::AsyncReadExt;
     use tokio::process::Command;
 
-    let demodulator = Demodulator:: new(config.clone());
+    let demodulator = Demodulator::new(config.clone());
 
     // Build rtl_sdr command
     let mut cmd = Command::new("rtl_sdr");
     cmd.arg("-f")
-        .arg(config.freq. to_string())
+        .arg(config.freq.to_string())
         .arg("-s")
         .arg("2000000")
         .arg("-g")
         .arg(if config.gain < 0 {
-            "0". to_string()
+            "0".to_string()
         } else {
             (config.gain / 10).to_string()
         })
@@ -171,7 +171,7 @@ async fn run_rtlsdr_command(
 
     loop {
         let overlap = (8 + 112 - 1) * 4;
-        data. copy_within(read_size.. read_size + overlap, 0);
+        data.copy_within(read_size..read_size + overlap, 0);
 
         let mut total_read = 0;
         while total_read < read_size {
@@ -181,25 +181,27 @@ async fn run_rtlsdr_command(
             {
                 Ok(0) => return Ok(()), // EOF
                 Ok(n) => total_read += n,
-                Err(e) => return Err(e. into()),
+                Err(e) => return Err(e.into()),
             }
         }
 
         // Process the data
-        let magnitude =
-            crate::magnitude::compute_magnitude_vector(&data[..overlap + read_size], &demodulator.mag_lut);
+        let magnitude = crate::magnitude::compute_magnitude_vector(
+            &data[..overlap + read_size],
+            &demodulator.mag_lut,
+        );
         demodulator.detect_modes_external(&magnitude, msg_tx);
     }
 }
 
 async fn process_messages(
-    rx:  Receiver<ModesMessage>,
+    rx: Receiver<ModesMessage>,
     store: Arc<RwLock<AircraftStore>>,
     config: Config,
 ) {
     while let Ok(msg) = rx.recv() {
         // Update aircraft tracking
-        if msg.crc_ok || ! config.check_crc {
+        if msg.crc_ok || !config.check_crc {
             let mut store = store.write();
             store.update_from_message(&msg);
         }
@@ -217,7 +219,7 @@ async fn process_messages(
     }
 }
 
-async fn interactive_display(store: Arc<RwLock<AircraftStore>>, max_rows: usize, metric:  bool) {
+async fn interactive_display(store: Arc<RwLock<AircraftStore>>, max_rows: usize, metric: bool) {
     let refresh_interval = Duration::from_millis(250);
 
     loop {
@@ -237,12 +239,12 @@ async fn interactive_display(store: Arc<RwLock<AircraftStore>>, max_rows: usize,
         let store = store.read();
         let now = Instant::now();
 
-        let mut aircraft:  Vec<_> = store.all().collect();
+        let mut aircraft: Vec<_> = store.all().collect();
         // Sort by most recently seen
         aircraft.sort_by(|a, b| b.seen.cmp(&a.seen));
 
         let mut count = 0;
-        for ac in aircraft. iter().take(max_rows) {
+        for ac in aircraft.iter().take(max_rows) {
             let seen_secs = now.duration_since(ac.seen).as_secs();
 
             let (altitude, speed) = if metric {
@@ -255,7 +257,7 @@ async fn interactive_display(store: Arc<RwLock<AircraftStore>>, max_rows: usize,
             };
 
             let alt_str = if altitude != 0 {
-                format! ("{}", altitude)
+                format!("{}", altitude)
             } else {
                 String::new()
             };
@@ -301,7 +303,7 @@ async fn interactive_display(store: Arc<RwLock<AircraftStore>>, max_rows: usize,
         }
 
         // Print footer
-        println! ("{}", "-".repeat(80));
+        println!("{}", "-".repeat(80));
         println!(
             "Aircraft:  {} | {} mode | Press Ctrl+C to exit",
             count,

@@ -1,6 +1,6 @@
 //! Network services for dump1090-rs
 //!
-//!  Mirrors the original dump1090 networking approach. 
+//!  Mirrors the original dump1090 networking approach.
 
 use std::fs;
 use std::sync::Arc;
@@ -8,10 +8,10 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
-use tokio:: sync::broadcast;
+use tokio::sync::broadcast;
 use tracing::{debug, error, info};
 
-use crate:: aircraft::AircraftStore;
+use crate::aircraft::AircraftStore;
 use crate::config::Config;
 use crate::decoder;
 
@@ -37,7 +37,7 @@ pub async fn run_servers(
     let raw_in_handle = {
         let port = config.net_ri_port;
         let store = Arc::clone(&aircraft_store);
-        let cfg = config. clone();
+        let cfg = config.clone();
         let tx = raw_tx.clone();
         tokio::spawn(async move {
             if let Err(e) = run_raw_input_server(port, store, cfg, tx).await {
@@ -58,7 +58,7 @@ pub async fn run_servers(
 
     let http_handle = {
         let port = config.net_http_port;
-        let store = Arc:: clone(&aircraft_store);
+        let store = Arc::clone(&aircraft_store);
         tokio::spawn(async move {
             if let Err(e) = run_http_server(port, store).await {
                 error!("HTTP server error: {}", e);
@@ -66,7 +66,7 @@ pub async fn run_servers(
         })
     };
 
-    tokio:: select! {
+    tokio::select! {
         _ = raw_out_handle => {}
         _ = raw_in_handle => {}
         _ = sbs_handle => {}
@@ -100,7 +100,7 @@ async fn run_raw_output_server(
                             break;
                         }
                     }
-                    Err(broadcast:: error::RecvError::Lagged(_)) => continue,
+                    Err(broadcast::error::RecvError::Lagged(_)) => continue,
                     Err(_) => break,
                 }
             }
@@ -131,7 +131,7 @@ async fn run_raw_input_server(
             let mut lines = reader.lines();
 
             while let Ok(Some(line)) = lines.next_line().await {
-                let line = line. trim();
+                let line = line.trim();
                 if line.is_empty() {
                     continue;
                 }
@@ -139,7 +139,7 @@ async fn run_raw_input_server(
                 if let Some(mm) =
                     decoder::decode_hex_message(line, config.fix_errors, config.aggressive)
                 {
-                    if mm. crc_ok || ! config.check_crc {
+                    if mm.crc_ok || !config.check_crc {
                         {
                             let mut store = store.write();
                             store.update_from_message(&mm);
@@ -154,7 +154,7 @@ async fn run_raw_input_server(
 }
 
 async fn run_sbs_server(
-    port:  u16,
+    port: u16,
     tx: broadcast::Sender<String>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
@@ -162,7 +162,7 @@ async fn run_sbs_server(
 
     loop {
         let (socket, addr) = listener.accept().await?;
-        debug! ("SBS client connected: {}", addr);
+        debug!("SBS client connected: {}", addr);
         let mut rx = tx.subscribe();
 
         tokio::spawn(async move {
@@ -170,18 +170,18 @@ async fn run_sbs_server(
             loop {
                 match rx.recv().await {
                     Ok(msg) => {
-                        if socket.write_all(msg. as_bytes()).await.is_err() {
+                        if socket.write_all(msg.as_bytes()).await.is_err() {
                             break;
                         }
                         if socket.write_all(b"\n").await.is_err() {
                             break;
                         }
                     }
-                    Err(broadcast::error:: RecvError::Lagged(_)) => continue,
+                    Err(broadcast::error::RecvError::Lagged(_)) => continue,
                     Err(_) => break,
                 }
             }
-            debug! ("SBS client disconnected: {}", addr);
+            debug!("SBS client disconnected: {}", addr);
         });
     }
 }
@@ -190,7 +190,7 @@ async fn run_http_server(
     port: u16,
     store: Arc<RwLock<AircraftStore>>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let listener = TcpListener::bind(format! ("0.0.0.0:{}", port)).await?;
+    let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
     info!("HTTP server listening on port {}", port);
 
     loop {
@@ -219,25 +219,29 @@ async fn handle_http_request(
         return Ok(());
     }
 
-    let request = String:: from_utf8_lossy(&buffer[..n]);
+    let request = String::from_utf8_lossy(&buffer[..n]);
 
     // Parse HTTP request
     let first_line = request.lines().next().unwrap_or("");
     let parts: Vec<&str> = first_line.split_whitespace().collect();
-    
+
     if parts.len() < 2 {
         return Ok(());
     }
 
     let url = parts[1];
-    
+
     // Check HTTP version for keep-alive
-    let http_version = if first_line.contains("HTTP/1.1") { 11 } else { 10 };
-    
+    let http_version = if first_line.contains("HTTP/1.1") {
+        11
+    } else {
+        10
+    };
+
     let keepalive = if http_version == 10 {
         request.to_lowercase().contains("connection: keep-alive")
     } else {
-        ! request.to_lowercase().contains("connection: close")
+        !request.to_lowercase().contains("connection: close")
     };
 
     // Serve content based on URL (matching original dump1090 behavior)
@@ -250,10 +254,7 @@ async fn handle_http_request(
         match fs::read_to_string("gmap.html") {
             Ok(html) => ("text/html;charset=utf-8", html),
             Err(e) => {
-                let error_msg = format!(
-                    "Error opening HTML file: {}",
-                    e
-                );
+                let error_msg = format!("Error opening HTML file: {}", e);
                 ("text/html;charset=utf-8", error_msg)
             }
         }
@@ -282,7 +283,7 @@ async fn handle_http_request(
 /// Generate JSON for aircraft data - matches original dump1090 format exactly
 fn aircrafts_to_json(store: &Arc<RwLock<AircraftStore>>) -> String {
     let store = store.read();
-    let aircraft:  Vec<_> = store.all().collect();
+    let aircraft: Vec<_> = store.all().collect();
 
     if aircraft.is_empty() {
         return "[\n]\n".to_string();

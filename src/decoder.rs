@@ -1,6 +1,6 @@
 //! Mode S message decoder
 //!
-//!  Decodes raw Mode S messages into structured data. 
+//!  Decodes raw Mode S messages into structured data.
 
 use std::fmt;
 
@@ -31,7 +31,7 @@ pub enum BdsData {
     AircraftIdentification { callsign: String },
     /// BDS 3,0 - ACAS active resolution advisory
     AcasResolutionAdvisory {
-        ara:  u16,
+        ara: u16,
         rac: u8,
         rat: bool,
         mte: bool,
@@ -57,7 +57,7 @@ pub enum BdsData {
     HeadingAndSpeedReport {
         magnetic_heading: Option<f32>,
         indicated_airspeed: Option<u16>,
-        mach:  Option<f32>,
+        mach: Option<f32>,
         baro_altitude_rate: Option<i16>,
         inertial_altitude_rate: Option<i16>,
     },
@@ -103,7 +103,7 @@ pub struct ModesMessage {
     /// Altitude unit
     pub unit: AltitudeUnit,
     /// Flight callsign
-    pub flight:  String,
+    pub flight: String,
     /// Aircraft type category
     pub aircraft_type: u8,
     /// CPR format flag (false = even, true = odd)
@@ -137,7 +137,7 @@ pub struct ModesMessage {
     /// Whether phase correction was applied
     pub phase_corrected: bool,
     /// BDS data from DF20/DF21 MB field
-    pub bds_data:  Option<BdsData>,
+    pub bds_data: Option<BdsData>,
 }
 
 impl Default for ModesMessage {
@@ -159,18 +159,18 @@ impl Default for ModesMessage {
             um: 0,
             identity: 0,
             altitude: 0,
-            unit: AltitudeUnit:: Feet,
-            flight: String:: new(),
-            aircraft_type:  0,
-            fflag:  false,
+            unit: AltitudeUnit::Feet,
+            flight: String::new(),
+            aircraft_type: 0,
+            fflag: false,
             tflag: false,
             raw_latitude: 0,
-            raw_longitude:  0,
+            raw_longitude: 0,
             heading_is_valid: false,
             heading: 0.0,
             ew_dir: 0,
             ew_velocity: 0,
-            ns_dir:  0,
+            ns_dir: 0,
             ns_velocity: 0,
             vert_rate_source: 0,
             vert_rate_sign: 0,
@@ -194,15 +194,15 @@ impl ModesMessage {
         let mut s = String::with_capacity(bytes * 2 + 3);
         s.push('*');
         for i in 0..bytes {
-            s. push_str(&format!("{:02X}", self.msg[i]));
+            s.push_str(&format!("{:02X}", self.msg[i]));
         }
-        s. push(';');
+        s.push(';');
         s
     }
 
     /// Format as SBS/BaseStation output
-    pub fn to_sbs_string(&self, lat:  f64, lon: f64) -> Option<String> {
-        let icao = format!("{:02X}{:02X}{:02X}", self.aa[0], self. aa[1], self.aa[2]);
+    pub fn to_sbs_string(&self, lat: f64, lon: f64) -> Option<String> {
+        let icao = format!("{:02X}{:02X}{:02X}", self.aa[0], self.aa[1], self.aa[2]);
 
         match self.msg_type {
             0 => Some(format!(
@@ -223,7 +223,7 @@ impl ModesMessage {
                     icao, self.identity, alert, emergency, spi, ground
                 ))
             }
-            11 => Some(format! ("MSG,8,,,{},,,,,,,,,,,,,,,,,", icao)),
+            11 => Some(format!("MSG,8,,,{},,,,,,,,,,,,,,,,,", icao)),
             17 if self.me_type == 4 => Some(format!(
                 "MSG,1,,,{},,,,,,,{},,,,,,,,0,0,0,0",
                 icao, self.flight
@@ -237,7 +237,7 @@ impl ModesMessage {
                 } else {
                     Some(format!(
                         "MSG,3,,,{},,,,,,,{},,{:.5},{:.5},,,0,0,0,0",
-                        icao, self. altitude, lat, lon
+                        icao, self.altitude, lat, lon
                     ))
                 }
             }
@@ -263,37 +263,28 @@ impl ModesMessage {
 
     /// Decode flight status flags for SBS output
     fn decode_flight_status_flags(&self) -> (i32, i32, i32, i32) {
-        let emergency =
-            if self.identity == 7500 || self.identity == 7600 || self.identity == 7700 {
-                -1
-            } else {
-                0
-            };
-        let ground = if self.fs == 1 || self.fs == 3 {
+        let emergency = if self.identity == 7500 || self.identity == 7600 || self.identity == 7700 {
             -1
         } else {
             0
         };
+        let ground = if self.fs == 1 || self.fs == 3 { -1 } else { 0 };
         let alert = if self.fs == 2 || self.fs == 3 || self.fs == 4 {
             -1
         } else {
             0
         };
-        let spi = if self.fs == 4 || self.fs == 5 {
-            -1
-        } else {
-            0
-        };
+        let spi = if self.fs == 4 || self.fs == 5 { -1 } else { 0 };
         (alert, emergency, spi, ground)
     }
 }
 
 impl fmt::Display for ModesMessage {
-    fn fmt(&self, f: &mut fmt:: Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Show raw message hex
         write!(f, "*")?;
         for i in 0..(self.msg_bits / 8) {
-            write!(f, "{:02X}", self. msg[i])?;
+            write!(f, "{:02X}", self.msg[i])?;
         }
         writeln!(f, ";")?;
 
@@ -350,7 +341,7 @@ impl fmt::Display for ModesMessage {
                 writeln!(
                     f,
                     "  ICAO Address   : {:02x}{:02x}{:02x}",
-                    self. aa[0], self.aa[1], self.aa[2]
+                    self.aa[0], self.aa[1], self.aa[2]
                 )?;
 
                 if self.msg_type == 20 {
@@ -388,7 +379,7 @@ impl fmt::Display for ModesMessage {
                 writeln!(
                     f,
                     "  ICAO Address:  {:02x}{:02x}{:02x}",
-                    self.aa[0], self. aa[1], self.aa[2]
+                    self.aa[0], self.aa[1], self.aa[2]
                 )?;
             }
             17 => {
@@ -449,7 +440,7 @@ impl fmt::Display for ModesMessage {
                         writeln!(f, "    NS velocity       : {}", self.ns_velocity)?;
                         writeln!(f, "    Vertical rate src :  {}", self.vert_rate_source)?;
                         writeln!(f, "    Vertical rate sign:  {}", self.vert_rate_sign)?;
-                        writeln!(f, "    Vertical rate     : {}", self. vert_rate)?;
+                        writeln!(f, "    Vertical rate     : {}", self.vert_rate)?;
                     } else {
                         writeln!(f, "    Heading status:  {}", self.heading_is_valid)?;
                         writeln!(f, "    Heading:  {:.1}", self.heading)?;
@@ -477,15 +468,11 @@ impl fmt::Display for ModesMessage {
                 writeln!(
                     f,
                     "  ICAO Address   :  {:02x}{:02x}{:02x}",
-                    self.aa[0], self. aa[1], self.aa[2]
+                    self.aa[0], self.aa[1], self.aa[2]
                 )?;
             }
             _ => {
-                writeln!(
-                    f,
-                    "DF {} (decoding not fully implemented)",
-                    self.msg_type
-                )?;
+                writeln!(f, "DF {} (decoding not fully implemented)", self.msg_type)?;
             }
         }
 
@@ -514,7 +501,7 @@ fn format_bds_data(bds: &BdsData) -> String {
                 ara, rac, rat, mte
             )
         }
-        BdsData:: SelectedVerticalIntention {
+        BdsData::SelectedVerticalIntention {
             mcp_altitude,
             fms_altitude,
             baro_setting,
@@ -544,7 +531,7 @@ fn format_bds_data(bds: &BdsData) -> String {
             true_airspeed,
         } => {
             let roll = roll_angle
-                . map(|r| format!("{:.1}°", r))
+                .map(|r| format!("{:.1}°", r))
                 .unwrap_or_else(|| "N/A".to_string());
             let track = true_track
                 .map(|t| format!("{:.1}°", t))
@@ -563,7 +550,7 @@ fn format_bds_data(bds: &BdsData) -> String {
                 roll, track, gs, tr, tas
             )
         }
-        BdsData:: HeadingAndSpeedReport {
+        BdsData::HeadingAndSpeedReport {
             magnetic_heading,
             indicated_airspeed,
             mach,
@@ -571,10 +558,10 @@ fn format_bds_data(bds: &BdsData) -> String {
             inertial_altitude_rate,
         } => {
             let hdg = magnetic_heading
-                . map(|h| format!("{:.1}°", h))
+                .map(|h| format!("{:.1}°", h))
                 .unwrap_or_else(|| "N/A".to_string());
             let ias = indicated_airspeed
-                .map(|i| format! ("{} kt", i))
+                .map(|i| format!("{} kt", i))
                 .unwrap_or_else(|| "N/A".to_string());
             let m = mach
                 .map(|m| format!("{:.3}", m))
@@ -608,8 +595,7 @@ fn format_bds_data(bds: &BdsData) -> String {
 }
 
 /// AIS charset for flight ID decoding
-const AIS_CHARSET: &[u8; 64] =
-    b"?ABCDEFGHIJKLMNOPQRSTUVWXYZ????? ???????????????0123456789??????";
+const AIS_CHARSET: &[u8; 64] = b"?ABCDEFGHIJKLMNOPQRSTUVWXYZ????? ???????????????0123456789??????";
 
 /// Decode Gillham (Gray code) altitude
 fn decode_gillham_altitude(code: u16) -> Option<i32> {
@@ -657,7 +643,7 @@ fn gray_to_binary_4bit(gray: u8) -> u8 {
     binary & 0x0F
 }
 
-fn gray_to_binary_3bit(gray:  u8) -> u8 {
+fn gray_to_binary_3bit(gray: u8) -> u8 {
     let mut binary = gray;
     binary ^= binary >> 2;
     binary ^= binary >> 1;
@@ -692,8 +678,11 @@ fn decode_mb_field(msg: &[u8]) -> Option<BdsData> {
     }
 
     let mut data = [0u8; 7];
-    data. copy_from_slice(mb);
-    Some(BdsData::Unknown { bds_code: 0x00, data })
+    data.copy_from_slice(mb);
+    Some(BdsData::Unknown {
+        bds_code: 0x00,
+        data,
+    })
 }
 
 fn try_decode_bds_10(mb: &[u8]) -> Option<BdsData> {
@@ -733,16 +722,16 @@ fn try_decode_bds_20(mb: &[u8]) -> Option<BdsData> {
         }
     }
 
-    if ! valid_chars {
+    if !valid_chars {
         return None;
     }
 
     let chars: Vec<char> = char_indices
         .iter()
-        .map(|&idx| AIS_CHARSET[idx. min(63)] as char)
+        .map(|&idx| AIS_CHARSET[idx.min(63)] as char)
         .collect();
 
-    let callsign:  String = chars.into_iter().collect::<String>().trim().to_string();
+    let callsign: String = chars.into_iter().collect::<String>().trim().to_string();
 
     if callsign.is_empty() || callsign.chars().all(|c| c == ' ' || c == '?') {
         return None;
@@ -761,7 +750,7 @@ fn try_decode_bds_30(mb: &[u8]) -> Option<BdsData> {
         return None;
     }
 
-    Some(BdsData:: AcasResolutionAdvisory { ara, rac, rat, mte })
+    Some(BdsData::AcasResolutionAdvisory { ara, rac, rat, mte })
 }
 
 fn try_decode_bds_40(mb: &[u8]) -> Option<BdsData> {
@@ -814,7 +803,7 @@ fn try_decode_bds_40(mb: &[u8]) -> Option<BdsData> {
         }
     }
 
-    Some(BdsData:: SelectedVerticalIntention {
+    Some(BdsData::SelectedVerticalIntention {
         mcp_altitude,
         fms_altitude,
         baro_setting,
@@ -884,7 +873,7 @@ fn try_decode_bds_50(mb: &[u8]) -> Option<BdsData> {
     }
 
     if let Some(roll) = roll_angle {
-        if roll. abs() > 60.0 {
+        if roll.abs() > 60.0 {
             return None;
         }
     }
@@ -988,7 +977,7 @@ fn try_decode_bds_60(mb: &[u8]) -> Option<BdsData> {
 }
 
 /// Decode a Mode S message from raw bytes.  
-/// 
+///
 /// For DF4/5/20/21, we can only validate if we have a known ICAO to check against.
 /// Pass `known_icao` as Some(icao) to validate, or None to attempt recovery.
 pub fn decode_modes_message(raw_msg: &[u8], fix_errors: bool, aggressive: bool) -> ModesMessage {
@@ -1013,17 +1002,17 @@ pub fn decode_modes_message(raw_msg: &[u8], fix_errors: bool, aggressive: bool) 
 
         // Extract and verify CRC
         mm.crc = extract_crc(&mm.msg, mm.msg_bits);
-        let computed_crc = modes_checksum(&mm.msg, mm. msg_bits);
+        let computed_crc = modes_checksum(&mm.msg, mm.msg_bits);
         mm.crc_ok = mm.crc == computed_crc;
 
         // Attempt error correction for DF11 and DF17 messages
-        if ! mm.crc_ok && fix_errors && (mm.msg_type == 11 || mm.msg_type == 17) {
-            if let Some(bit) = crc:: fix_single_bit_errors(&mut mm.msg, mm.msg_bits) {
+        if !mm.crc_ok && fix_errors && (mm.msg_type == 11 || mm.msg_type == 17) {
+            if let Some(bit) = crc::fix_single_bit_errors(&mut mm.msg, mm.msg_bits) {
                 mm.error_bit = Some(bit);
                 mm.crc = extract_crc(&mm.msg, mm.msg_bits);
                 mm.crc_ok = true;
             } else if aggressive && mm.msg_type == 17 {
-                if let Some((bit1, bit2)) = crc::fix_two_bit_errors(&mut mm. msg, mm.msg_bits) {
+                if let Some((bit1, bit2)) = crc::fix_two_bit_errors(&mut mm.msg, mm.msg_bits) {
                     mm.error_bit = Some(bit1);
                     mm.error_bit2 = Some(bit2);
                     mm.crc = extract_crc(&mm.msg, mm.msg_bits);
@@ -1040,12 +1029,12 @@ pub fn decode_modes_message(raw_msg: &[u8], fix_errors: bool, aggressive: bool) 
         let recovered_icao = computed_crc ^ received_crc;
 
         mm.crc = received_crc;
-        mm. aa = [
+        mm.aa = [
             ((recovered_icao >> 16) & 0xFF) as u8,
             ((recovered_icao >> 8) & 0xFF) as u8,
             (recovered_icao & 0xFF) as u8,
         ];
-        
+
         // Mark as NOT OK - needs validation against known ICAOs
         // The aircraft tracker will validate this
         mm.crc_ok = false;
@@ -1095,7 +1084,7 @@ pub fn validate_icao(mm: &mut ModesMessage, known_icao: u32) {
     if mm.crc_ok {
         return; // Already validated
     }
-    
+
     // Check if recovered ICAO matches known ICAO
     let recovered = mm.icao_address();
     if recovered == known_icao {
@@ -1118,7 +1107,7 @@ fn decode_extended_squitter(mm: &mut ModesMessage) {
             (mm.msg[10] & 0x3F) as usize,
         ];
 
-        let chars:  Vec<char> = char_indices
+        let chars: Vec<char> = char_indices
             .iter()
             .map(|&idx| {
                 if idx < AIS_CHARSET.len() {
@@ -1129,7 +1118,7 @@ fn decode_extended_squitter(mm: &mut ModesMessage) {
             })
             .collect();
 
-        mm.flight = chars. into_iter().collect::<String>().trim().to_string();
+        mm.flight = chars.into_iter().collect::<String>().trim().to_string();
     } else if (9..=18).contains(&mm.me_type) {
         mm.fflag = (mm.msg[6] & 0x04) != 0;
         mm.tflag = (mm.msg[6] & 0x08) != 0;
@@ -1138,28 +1127,27 @@ fn decode_extended_squitter(mm: &mut ModesMessage) {
         mm.raw_latitude = (((mm.msg[6] & 0x03) as u32) << 15)
             | ((mm.msg[7] as u32) << 7)
             | ((mm.msg[8] >> 1) as u32);
-        mm.raw_longitude = (((mm.msg[8] & 0x01) as u32) << 16)
-            | ((mm.msg[9] as u32) << 8)
-            | (mm.msg[10] as u32);
+        mm.raw_longitude =
+            (((mm.msg[8] & 0x01) as u32) << 16) | ((mm.msg[9] as u32) << 8) | (mm.msg[10] as u32);
     } else if mm.me_type == 19 && (1..=4).contains(&mm.me_sub) {
         if mm.me_sub == 1 || mm.me_sub == 2 {
-            mm. ew_dir = (mm.msg[5] & 0x04) >> 2;
-            mm. ew_velocity = (((mm.msg[5] & 0x03) as u16) << 8) | (mm.msg[6] as u16);
+            mm.ew_dir = (mm.msg[5] & 0x04) >> 2;
+            mm.ew_velocity = (((mm.msg[5] & 0x03) as u16) << 8) | (mm.msg[6] as u16);
             mm.ns_dir = (mm.msg[7] & 0x80) >> 7;
             mm.ns_velocity =
                 (((mm.msg[7] & 0x7F) as u16) << 3) | (((mm.msg[8] & 0xE0) >> 5) as u16);
-            mm. vert_rate_source = (mm.msg[8] & 0x10) >> 4;
-            mm. vert_rate_sign = (mm.msg[8] & 0x08) >> 3;
+            mm.vert_rate_source = (mm.msg[8] & 0x10) >> 4;
+            mm.vert_rate_sign = (mm.msg[8] & 0x08) >> 3;
             mm.vert_rate = (((mm.msg[8] & 0x07) as u16) << 6) | (((mm.msg[9] & 0xFC) >> 2) as u16);
 
             let ewv = mm.ew_velocity as f64;
-            let nsv = mm. ns_velocity as f64;
+            let nsv = mm.ns_velocity as f64;
             mm.velocity = (ewv * ewv + nsv * nsv).sqrt() as u16;
 
             if mm.velocity > 0 {
                 let ewv_signed = if mm.ew_dir != 0 { -ewv } else { ewv };
                 let nsv_signed = if mm.ns_dir != 0 { -nsv } else { nsv };
-                let mut heading = ewv_signed. atan2(nsv_signed) * 180.0 / std::f64::consts::PI;
+                let mut heading = ewv_signed.atan2(nsv_signed) * 180.0 / std::f64::consts::PI;
                 if heading < 0.0 {
                     heading += 360.0;
                 }
@@ -1174,12 +1162,12 @@ fn decode_extended_squitter(mm: &mut ModesMessage) {
 }
 
 /// Decode 13-bit AC altitude field (used in DF0, DF4, DF16, DF20)
-fn decode_ac13_field(msg:  &[u8], unit: &mut AltitudeUnit) -> i32 {
+fn decode_ac13_field(msg: &[u8], unit: &mut AltitudeUnit) -> i32 {
     let m_bit = (msg[3] & 0x40) != 0;
     let q_bit = (msg[3] & 0x10) != 0;
 
-    if ! m_bit {
-        *unit = AltitudeUnit:: Feet;
+    if !m_bit {
+        *unit = AltitudeUnit::Feet;
         if q_bit {
             let n = (((msg[2] & 0x1F) as i32) << 6)
                 | (((msg[3] & 0x80) >> 2) as i32)
@@ -1216,7 +1204,7 @@ fn decode_ac13_field(msg:  &[u8], unit: &mut AltitudeUnit) -> i32 {
             }
         }
     } else {
-        *unit = AltitudeUnit:: Meters;
+        *unit = AltitudeUnit::Meters;
         let n = (((msg[2] & 0x1F) as i32) << 7)
             | (((msg[3] & 0x80) >> 1) as i32)
             | ((msg[3] & 0x20) as i32)
@@ -1235,7 +1223,7 @@ fn decode_ac12_field(msg: &[u8], unit: &mut AltitudeUnit) -> i32 {
         let n = (((msg[5] >> 1) as i32) << 4) | (((msg[6] & 0xF0) >> 4) as i32);
         return n * 25 - 1000;
     } else {
-        *unit = AltitudeUnit:: Feet;
+        *unit = AltitudeUnit::Feet;
         let c1 = (msg[5] >> 1) & 1;
         let a1 = (msg[5] >> 2) & 1;
         let c2 = (msg[5] >> 3) & 1;
@@ -1321,14 +1309,14 @@ fn get_me_description(metype: u8, mesub: u8) -> &'static str {
 }
 
 /// Parse a hex string message (from network input)
-pub fn decode_hex_message(hex:  &str, fix_errors: bool, aggressive: bool) -> Option<ModesMessage> {
+pub fn decode_hex_message(hex: &str, fix_errors: bool, aggressive: bool) -> Option<ModesMessage> {
     let hex = hex.trim();
 
-    if hex.len() < 4 || ! hex.starts_with('*') || !hex.ends_with(';') {
+    if hex.len() < 4 || !hex.starts_with('*') || !hex.ends_with(';') {
         return None;
     }
 
-    let hex_data = &hex[1..hex. len() - 1];
+    let hex_data = &hex[1..hex.len() - 1];
 
     if hex_data.len() > MODES_LONG_MSG_BYTES * 2 || hex_data.len() % 2 != 0 {
         return None;
