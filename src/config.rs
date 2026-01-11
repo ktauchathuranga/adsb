@@ -29,6 +29,12 @@ pub struct Config {
     /// Minimum messages required before showing aircraft (filter ghosts)
     pub min_messages: u64,
 
+    // Receiver position (for distance/bearing calculation)
+    /// Receiver latitude (optional)
+    pub receiver_lat: Option<f64>,
+    /// Receiver longitude (optional)
+    pub receiver_lon: Option<f64>,
+
     // Networking
     pub net: bool,
     pub net_only: bool,
@@ -67,11 +73,13 @@ impl Default for Config {
             aggressive: false,
             raw: false,
             onlyaddr: false,
-            metric: false,
+            metric: true,
             interactive: false,
             interactive_rows: 15,
             interactive_ttl: 60,
             min_messages: 2,
+            receiver_lat: None,
+            receiver_lon: None,
             net: false,
             net_only: false,
             net_ro_port: 30002,
@@ -143,6 +151,7 @@ impl Config {
                 }
                 "--onlyaddr" => config.onlyaddr = true,
                 "--metric" => config.metric = true,
+                "--imperial" => config.metric = false,
                 "--aggressive" => config.aggressive = true,
                 "--interactive" => config.interactive = true,
                 "--interactive-rows" => {
@@ -157,6 +166,14 @@ impl Config {
                 "--min-messages" => {
                     i += 1;
                     config.min_messages = args.get(i).and_then(|s| s.parse().ok()).unwrap_or(2);
+                }
+                "--lat" => {
+                    i += 1;
+                    config.receiver_lat = args.get(i).and_then(|s| s.parse().ok());
+                }
+                "--lon" => {
+                    i += 1;
+                    config.receiver_lon = args.get(i).and_then(|s| s.parse().ok());
                 }
                 "--stats" => config.stats = true,
                 "--debug" => {
@@ -223,6 +240,8 @@ Options:
   --onlyaddr             Show only ICAO addresses
   --metric               Use metric units
   --min-messages <N>     Min messages before showing aircraft (default: 2)
+  --lat <degrees>        Receiver latitude for distance calculation
+  --lon <degrees>        Receiver longitude for distance calculation
   --debug <flags>        Debug mode (d/D/c/C/p/n/j)
   --help                 Show this help
 "#

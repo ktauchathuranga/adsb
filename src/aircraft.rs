@@ -11,6 +11,7 @@ use crate::decoder::{BdsData, ModesMessage};
 #[derive(Debug, Clone)]
 pub struct Aircraft {
     /// ICAO 24-bit address
+    #[allow(dead_code)]
     pub addr: u32,
     /// Hex address string
     pub hex_addr: String,
@@ -58,6 +59,8 @@ pub struct Aircraft {
     pub selected_altitude: Option<u16>,
     /// Barometric pressure setting (from BDS 4,0)
     pub baro_setting: Option<f32>,
+    /// Squawk code (identity) from DF5/DF21
+    pub squawk: u16,
 }
 
 impl Aircraft {
@@ -88,6 +91,7 @@ impl Aircraft {
             baro_altitude_rate: None,
             selected_altitude: None,
             baro_setting: None,
+            squawk: 0,
         }
     }
 }
@@ -101,6 +105,7 @@ pub struct AircraftStore {
 }
 
 impl AircraftStore {
+    #[allow(dead_code)]
     pub fn new(ttl_secs: u64) -> Self {
         Self::with_min_messages(ttl_secs, 2)
     }
@@ -137,6 +142,11 @@ impl AircraftStore {
                 }
             }
             5 | 21 => {
+                // Store squawk (identity) code
+                if mm.identity != 0 {
+                    aircraft.squawk = mm.identity;
+                }
+                
                 // Extract BDS data if present (DF21)
                 if mm.msg_type == 21 {
                     if let Some(ref bds) = mm.bds_data {
@@ -252,6 +262,7 @@ impl AircraftStore {
     }
 
     /// Get aircraft by ICAO address
+    #[allow(dead_code)]
     pub fn get(&self, addr: u32) -> Option<&Aircraft> {
         self.aircraft.get(&addr)
     }
@@ -263,6 +274,7 @@ impl AircraftStore {
     }
 
     /// Get all aircraft including those below message threshold (for internal use)
+    #[allow(dead_code)]
     pub fn all_unfiltered(&self) -> impl Iterator<Item = &Aircraft> {
         self.aircraft.values()
     }
@@ -275,15 +287,18 @@ impl AircraftStore {
     }
 
     /// Number of tracked aircraft (meeting minimum message threshold)
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.all().count()
     }
 
     /// Number of all tracked aircraft including below threshold
+    #[allow(dead_code)]
     pub fn len_total(&self) -> usize {
         self.aircraft.len()
     }
 
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -341,6 +356,7 @@ impl AircraftStore {
     }
 
     /// Generate JSON representation of all aircraft
+    #[allow(dead_code)]
     pub fn to_json(&self) -> String {
         let mut json = String::from("[\n");
         let mut first = true;

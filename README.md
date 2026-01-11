@@ -60,10 +60,13 @@ ADS-B (Automatic Dependent Surveillance-Broadcast) is a surveillance technology 
 - **ADS-B Extended Squitter**: Full DF17 message decoding including position, velocity, and identification
 - **CPR Position Decoding**: Compact Position Reporting with global and local decoding
 - **Error Correction**: Single-bit and two-bit error correction using CRC syndrome
-- **BDS Decoding**: Comm-B Data Selector registers (BDS 1,0 through 6,0)
+- **Ghost Aircraft Filtering**: Persistent ICAO tracking with minimum message threshold to eliminate phantom aircraft
+- **BDS Decoding**: Comm-B Data Selector registers (BDS 1,0 through 6,0) with CLI display of IAS, Mach, vertical rate
+- **Emergency Squawk Alerts**: Color-coded highlighting for 7500 (hijack), 7600 (radio failure), 7700 (emergency)
+- **Distance & Bearing**: Calculate distance and bearing from your receiver position to aircraft
 - **Multiple Input Sources**: RTL-SDR devices, file input, network input
 - **Network Output**: Raw, SBS/BaseStation, and HTTP/JSON formats
-- **Interactive Display**: Real-time terminal display of tracked aircraft
+- **Interactive Display**: Real-time terminal display with BDS data, color-coded alerts, and position info
 - **Web Interface**: Browser-based aircraft map visualization
 
 ## Installation
@@ -100,6 +103,12 @@ cargo build --release
 
 # With network output
 ./target/release/dump1090-rs --net --interactive
+
+# With your receiver position (shows distance/bearing to aircraft)
+./target/release/dump1090-rs --interactive --lat 6.9271 --lon 79.8612
+
+# Stricter ghost filtering (require 3+ messages before showing aircraft)
+./target/release/dump1090-rs --interactive --min-messages 3
 ```
 
 ## Usage
@@ -112,24 +121,29 @@ USAGE:
 
 OPTIONS:
     --device-index <N>     Select RTL device (default: 0)
-    --gain <db>            Set gain (default: max.  Use -10 for auto-gain)
+    --gain <db>            Set gain (default: max. Use -10 for auto-gain)
     --enable-agc           Enable Automatic Gain Control
     --freq <hz>            Set frequency (default: 1090 MHz)
     --ifile <filename>     Read data from file (use '-' for stdin)
     --loop                 With --ifile, read the same file in a loop
     --interactive          Interactive mode refreshing data on screen
     --interactive-rows <N> Max rows in interactive mode (default: 15)
-    --interactive-ttl <s>  Remove aircraft if idle for <s> seconds (default:  60)
+    --interactive-ttl <s>  Remove aircraft if idle for <s> seconds (default: 60)
+    --min-messages <N>     Minimum messages before showing aircraft (default: 2)
+    --lat <degrees>        Receiver latitude for distance/bearing calculation
+    --lon <degrees>        Receiver longitude for distance/bearing calculation
     --raw                  Show only messages hex values
     --net                  Enable networking
     --net-only             Enable just networking, no RTL device
     --net-ro-port <port>   TCP port for raw output (default: 30002)
     --net-ri-port <port>   TCP port for raw input (default: 30001)
     --net-http-port <port> HTTP server port (default: 8080)
-    --net-sbs-port <port>  TCP port for SBS output (default:  30003)
+    --net-sbs-port <port>  TCP port for SBS output (default: 30003)
     --no-fix               Disable single-bit error correction
+    --no-crc-check         Disable CRC check
     --aggressive           More CPU for more messages (two-bit error correction)
-    --metric               Use metric units (meters, km/h)
+    --metric               Use metric units - meters, km/h (default)
+    --imperial             Use imperial units - feet, knots
     --help                 Show help
 ```
 
@@ -209,7 +223,7 @@ Mode S is a secondary surveillance radar (SSR) system that supports:
 ```
 Mode S Transponder Capabilities: 
 ┌─────────────────────────────────────────────────────────────┐
-│                      Mode S Transponder                      │
+│                      Mode S Transponder                     │
 ├─────────────────────┬───────────────────────────────────────┤
 │   Short Messages    │         Long Messages                 │
 │   (56 bits)         │         (112 bits)                    │
@@ -567,7 +581,7 @@ Since any 24-bit value could be a valid ICAO, we must validate by:
 ```
 Known ICAO Cache:
 ┌─────────────────────────────────────────────────────────────┐
-│ From DF11/DF17:    ICAO directly in message → Add to cach │
+│ From DF11/DF17:    ICAO directly in message → Add to cach   │
 │ From DF4/DF5/etc:   Recover ICAO → Check against cache      │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -1102,7 +1116,7 @@ MSG,3,,,4D2023,,,,,,,35000,,37.0740,13.7990,,,0,0,0,0
 ### JSON API
 
 ```
-GET http://localhost:8080/data. json
+GET http://localhost:8080/data.json
 
 Response:
 [

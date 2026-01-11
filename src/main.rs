@@ -72,13 +72,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             process_messages(msg_rx, store_for_processor, config_for_processor).await;
         });
 
-        // Interactive display task
         let interactive_handle = if config.interactive {
             let store = Arc::clone(&aircraft_store);
             let rows = config.interactive_rows;
             let metric = config.metric;
+            let receiver_lat = config.receiver_lat;
+            let receiver_lon = config.receiver_lon;
             Some(tokio::spawn(async move {
-                interactive_display(store, rows, metric).await;
+                interactive_display(store, rows, metric, receiver_lat, receiver_lon).await;
             }))
         } else {
             None
@@ -236,7 +237,13 @@ async fn process_messages(
     }
 }
 
-async fn interactive_display(store: Arc<RwLock<AircraftStore>>, max_rows: usize, metric:  bool) {
+async fn interactive_display(
+    store: Arc<RwLock<AircraftStore>>,
+    max_rows: usize,
+    metric: bool,
+    receiver_lat: Option<f64>,
+    receiver_lon: Option<f64>,
+) {
     let refresh_interval = Duration::from_millis(250);
 
     loop {
@@ -245,24 +252,49 @@ async fn interactive_display(store: Arc<RwLock<AircraftStore>>, max_rows: usize,
         // Clear screen and move cursor to top
         print!("\x1B[2J\x1B[H");
 
-        // Print header
-        println!(
-            "\x1B[1m{: <6} {: <8} {: >9} {:>7} {:>10} {:>11} {:>5} {:>9} {:>6}\x1B[0m",
-            "Hex", "Flight", "Altitude", "Speed", "Lat", "Lon", "Track", "Messages", "Seen"
-        );
-        println! ("{}", "-".repeat(80));
+        // ANSI color codes
+        const RED: &str = "\x1B[91m";
+        const YELLOW: &str = "\x1B[93m";
+        const GREEN: &str = "\x1B[92m";
+        const BOLD: &str = "\x1B[1m";
+        const RESET: &str = "\x1B[0m";
+
+        // Print header based on whether we have receiver position
+        let has_position = receiver_lat.is_some() && receiver_lon.is_some();
+        
+        if has_position {
+            println!(
+                "{BOLD}{:<6} {:<8} {:>7} {:>5} {:>6} {:>5} {:>5} {:>5} {:>4} {:>6} {:>3}{RESET}",
+                "Hex", "Flight", "Alt", "Spd", "Dist", "Brg", "VRate", "IAS", "M", "Msgs", "Age"
+            );
+        } else {
+            println!(
+                "{BOLD}{:<6} {:<8} {:>7} {:>5} {:>9} {:>10} {:>5} {:>5} {:>5} {:>4} {:>6} {:>3}{RESET}",
+                "Hex", "Flight", "Alt", "Spd", "Lat", "Lon", "Track", "VRate", "IAS", "M", "Msgs", "Age"
+            );
+        }
+        println!("{}", "-".repeat(if has_position { 75 } else { 95 }));
 
         // Get aircraft data
         let store = store.read();
         let now = Instant::now();
 
-        let mut aircraft:  Vec<_> = store.all().collect();
+        let mut aircraft: Vec<_> = store.all().collect();
         // Sort by most recently seen
         aircraft.sort_by(|a, b| b.seen.cmp(&a.seen));
 
         let count = aircraft.len();
         for ac in aircraft.iter().take(max_rows) {
             let seen_secs = now.duration_since(ac.seen).as_secs();
+
+            // Check for emergency squawk codes
+            let is_emergency = matches!(ac.squawk, 7500 | 7600 | 7700);
+            let squawk_color = match ac.squawk {
+                7500 => RED,    // Hijack
+                7600 => YELLOW, // Radio failure
+                7700 => RED,    // Emergency
+                _ => "",
+            };
 
             let (altitude, speed) = if metric {
                 (
@@ -274,7 +306,7 @@ async fn interactive_display(store: Arc<RwLock<AircraftStore>>, max_rows: usize,
             };
 
             let alt_str = if altitude != 0 {
-                format! ("{}", altitude)
+                format!("{}", altitude)
             } else {
                 String::new()
             };
@@ -285,46 +317,168 @@ async fn interactive_display(store: Arc<RwLock<AircraftStore>>, max_rows: usize,
                 String::new()
             };
 
-            let lat_str = if ac.lat != 0.0 {
-                format!("{:.4}", ac.lat)
+            // Vertical rate indicator with arrow
+            let vrate_str = if let Some(rate) = ac.baro_altitude_rate {
+                if rate > 100 {
+                    format!("{GREEN}▲{:+}{RESET}", rate)
+                } else if rate < -100 {
+                    format!("{YELLOW}▼{:+}{RESET}", rate)
+                } else {
+                    format!("{:+}", rate)
+                }
             } else {
                 String::new()
             };
 
-            let lon_str = if ac.lon != 0.0 {
-                format!("{:.4}", ac.lon)
-            } else {
-                String::new()
-            };
+            // IAS (Indicated Airspeed)
+            let ias_str = ac
+                .indicated_airspeed
+                .map(|v| format!("{}", v))
+                .unwrap_or_default();
 
-            let track_str = if ac.track != 0 {
-                format!("{}", ac.track)
-            } else {
-                String::new()
-            };
+            // Mach number
+            let mach_str = ac
+                .mach
+                .map(|m| format!("{:.2}", m))
+                .unwrap_or_default();
 
-            println!(
-                "{:<6} {:<8} {:>9} {: >7} {:>10} {: >11} {:>5} {: >9} {:>4}s",
-                ac.hex_addr,
-                ac.flight,
-                alt_str,
-                speed_str,
-                lat_str,
-                lon_str,
-                track_str,
-                ac.messages,
-                seen_secs
-            );
+            // Build the line based on whether we have receiver position
+            if has_position {
+                let (dist_str, brg_str) = if ac.lat != 0.0 && ac.lon != 0.0 {
+                    let (dist, brg) = calculate_distance_bearing(
+                        receiver_lat.unwrap(),
+                        receiver_lon.unwrap(),
+                        ac.lat,
+                        ac.lon,
+                    );
+                    let dist_val = if metric { dist } else { dist * 0.539957 }; // km to nm
+                    let unit = if metric { "km" } else { "nm" };
+                    (format!("{:.1}{}", dist_val, unit), format!("{:.0}°", brg))
+                } else {
+                    (String::new(), String::new())
+                };
+
+                // Color the hex for emergencies
+                let hex_display = if is_emergency {
+                    format!("{}{}{}", squawk_color, ac.hex_addr, RESET)
+                } else {
+                    ac.hex_addr.clone()
+                };
+
+                println!(
+                    "{:<6} {:<8} {:>7} {:>5} {:>6} {:>5} {:>5} {:>5} {:>4} {:>6} {:>2}s",
+                    hex_display,
+                    ac.flight,
+                    alt_str,
+                    speed_str,
+                    dist_str,
+                    brg_str,
+                    vrate_str,
+                    ias_str,
+                    mach_str,
+                    ac.messages,
+                    seen_secs
+                );
+            } else {
+                let lat_str = if ac.lat != 0.0 {
+                    format!("{:.4}", ac.lat)
+                } else {
+                    String::new()
+                };
+
+                let lon_str = if ac.lon != 0.0 {
+                    format!("{:.4}", ac.lon)
+                } else {
+                    String::new()
+                };
+
+                let track_str = if ac.track != 0 {
+                    format!("{}", ac.track)
+                } else {
+                    String::new()
+                };
+
+                // Color the hex for emergencies
+                let hex_display = if is_emergency {
+                    format!("{}{}{}", squawk_color, ac.hex_addr, RESET)
+                } else {
+                    ac.hex_addr.clone()
+                };
+
+                println!(
+                    "{:<6} {:<8} {:>7} {:>5} {:>9} {:>10} {:>5} {:>5} {:>5} {:>4} {:>6} {:>2}s",
+                    hex_display,
+                    ac.flight,
+                    alt_str,
+                    speed_str,
+                    lat_str,
+                    lon_str,
+                    track_str,
+                    vrate_str,
+                    ias_str,
+                    mach_str,
+                    ac.messages,
+                    seen_secs
+                );
+            }
+
+            // Show emergency warning on separate line
+            if is_emergency {
+                let warning = match ac.squawk {
+                    7500 => format!("{RED}  ⚠ HIJACK (7500){RESET}"),
+                    7600 => format!("{YELLOW}  ⚠ RADIO FAILURE (7600){RESET}"),
+                    7700 => format!("{RED}  ⚠ EMERGENCY (7700){RESET}"),
+                    _ => String::new(),
+                };
+                if !warning.is_empty() {
+                    println!("{}", warning);
+                }
+            }
         }
 
         // Print footer
-        println! ("{}", "-".repeat(80));
+        println!("{}", "-".repeat(if has_position { 75 } else { 95 }));
+        let pos_info = if has_position {
+            format!(
+                " | Pos: {:.4},{:.4}",
+                receiver_lat.unwrap(),
+                receiver_lon.unwrap()
+            )
+        } else {
+            String::new()
+        };
         println!(
-            "Aircraft:  {} | {} mode | Press Ctrl+C to exit",
+            "Aircraft: {} | {} mode{} | Ctrl+C to exit",
             count,
-            if metric { "Metric" } else { "Imperial" }
+            if metric { "Metric" } else { "Imperial" },
+            pos_info
         );
 
         io::stdout().flush().ok();
     }
+}
+
+/// Calculate distance (km) and bearing (degrees) between two lat/lon points
+/// Uses the Haversine formula
+fn calculate_distance_bearing(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> (f64, f64) {
+    const EARTH_RADIUS_KM: f64 = 6371.0;
+
+    let lat1_rad = lat1.to_radians();
+    let lat2_rad = lat2.to_radians();
+    let delta_lat = (lat2 - lat1).to_radians();
+    let delta_lon = (lon2 - lon1).to_radians();
+
+    // Haversine distance
+    let a = (delta_lat / 2.0).sin().powi(2)
+        + lat1_rad.cos() * lat2_rad.cos() * (delta_lon / 2.0).sin().powi(2);
+    let c = 2.0 * a.sqrt().asin();
+    let distance = EARTH_RADIUS_KM * c;
+
+    // Bearing
+    let y = delta_lon.sin() * lat2_rad.cos();
+    let x = lat1_rad.cos() * lat2_rad.sin() - lat1_rad.sin() * lat2_rad.cos() * delta_lon.cos();
+    let bearing_rad = y.atan2(x);
+    let bearing = (bearing_rad.to_degrees() + 360.0) % 360.0;
+
+    (distance, bearing)
 }

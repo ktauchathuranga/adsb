@@ -84,14 +84,11 @@ pub fn extract_crc(msg: &[u8], bits: usize) -> u32 {
     ((msg[len - 3] as u32) << 16) | ((msg[len - 2] as u32) << 8) | (msg[len - 1] as u32)
 }
 
-pub fn recover_icao_from_crc(msg: &[u8], bits: usize) -> u32 {
-    let crc = modes_checksum(msg, bits);
-    let received = extract_crc(msg, bits);
-    crc ^ received
-}
+
 
 /// Check if an ICAO address is plausible
 /// ICAO addresses are 24-bit values assigned to aircraft
+#[allow(dead_code)]
 fn is_valid_icao(icao: u32) -> bool {
     // ICAO addresses are 24-bit, non-zero
     icao != 0 && icao < 0x1000000
@@ -190,12 +187,7 @@ pub fn fix_two_bit_errors(msg: &mut [u8], bits: usize) -> Option<(usize, usize)>
     None
 }
 
-/// Verify CRC of a message.
-pub fn verify_crc(msg: &[u8], bits: usize) -> bool {
-    let crc_in_msg = extract_crc(msg, bits);
-    let computed_crc = modes_checksum(msg, bits);
-    crc_in_msg == computed_crc
-}
+
 
 #[cfg(test)]
 mod tests {

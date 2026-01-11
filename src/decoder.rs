@@ -10,6 +10,7 @@ use crate::crc::{self, extract_crc, modes_checksum};
 pub const MODES_LONG_MSG_BITS: usize = 112;
 pub const MODES_SHORT_MSG_BITS: usize = 56;
 pub const MODES_LONG_MSG_BYTES: usize = 14;
+#[allow(dead_code)]
 pub const MODES_SHORT_MSG_BYTES: usize = 7;
 
 /// Unit for altitude measurements
@@ -135,6 +136,7 @@ pub struct ModesMessage {
     /// Computed velocity
     pub velocity: u16,
     /// Whether phase correction was applied
+    #[allow(dead_code)]
     pub phase_corrected: bool,
     /// BDS data from DF20/DF21 MB field
     pub bds_data: Option<BdsData>,
@@ -201,6 +203,7 @@ impl ModesMessage {
     }
 
     /// Format as SBS/BaseStation output
+    #[allow(dead_code)]
     pub fn to_sbs_string(&self, lat: f64, lon: f64) -> Option<String> {
         let icao = format!("{:02X}{:02X}{:02X}", self.aa[0], self.aa[1], self.aa[2]);
 
@@ -262,6 +265,7 @@ impl ModesMessage {
     }
 
     /// Decode flight status flags for SBS output
+    #[allow(dead_code)]
     fn decode_flight_status_flags(&self) -> (i32, i32, i32, i32) {
         let emergency = if self.identity == 7500 || self.identity == 7600 || self.identity == 7700 {
             -1
@@ -1113,6 +1117,7 @@ pub fn decode_modes_message(raw_msg: &[u8], fix_errors: bool, aggressive: bool) 
 }
 
 /// Validate a message with ICAO-in-CRC against a known ICAO address
+#[allow(dead_code)]
 pub fn validate_icao(mm: &mut ModesMessage, known_icao: u32) {
     if mm.crc_ok {
         return; // Already validated
@@ -1380,6 +1385,7 @@ fn hex_digit_val(c: u8) -> Option<u8> {
 
 /// Convert Gray code to binary (generic version)
 /// Works for any bit width up to 32 bits
+#[allow(dead_code)]
 fn gray_to_binary(gray: u32) -> u32 {
     let mut binary = gray;
     binary ^= binary >> 16;
