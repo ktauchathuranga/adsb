@@ -26,6 +26,8 @@ pub struct Config {
     pub interactive: bool,
     pub interactive_rows: usize,
     pub interactive_ttl: u64,
+    /// Minimum messages required before showing aircraft (filter ghosts)
+    pub min_messages: u64,
 
     // Networking
     pub net: bool,
@@ -69,6 +71,7 @@ impl Default for Config {
             interactive: false,
             interactive_rows: 15,
             interactive_ttl: 60,
+            min_messages: 2,
             net: false,
             net_only: false,
             net_ro_port: 30002,
@@ -151,6 +154,10 @@ impl Config {
                     i += 1;
                     config.interactive_ttl = args.get(i).and_then(|s| s.parse().ok()).unwrap_or(60);
                 }
+                "--min-messages" => {
+                    i += 1;
+                    config.min_messages = args.get(i).and_then(|s| s.parse().ok()).unwrap_or(2);
+                }
                 "--stats" => config.stats = true,
                 "--debug" => {
                     i += 1;
@@ -215,6 +222,7 @@ Options:
   --stats                With --ifile print stats at exit
   --onlyaddr             Show only ICAO addresses
   --metric               Use metric units
+  --min-messages <N>     Min messages before showing aircraft (default: 2)
   --debug <flags>        Debug mode (d/D/c/C/p/n/j)
   --help                 Show this help
 "#

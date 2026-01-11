@@ -96,13 +96,21 @@ impl Aircraft {
 pub struct AircraftStore {
     aircraft: HashMap<u32, Aircraft>,
     ttl: Duration,
+    /// Minimum messages required before aircraft is considered confirmed
+    min_messages: u64,
 }
 
 impl AircraftStore {
     pub fn new(ttl_secs: u64) -> Self {
+        Self::with_min_messages(ttl_secs, 2)
+    }
+
+    /// Create a new store with custom minimum message threshold
+    pub fn with_min_messages(ttl_secs: u64, min_messages: u64) -> Self {
         Self {
             aircraft: HashMap::new(),
             ttl: Duration::from_secs(ttl_secs),
+            min_messages,
         }
     }
 
@@ -248,8 +256,14 @@ impl AircraftStore {
         self.aircraft.get(&addr)
     }
 
-    /// Get all aircraft
+    /// Get all aircraft that meet the minimum message threshold
     pub fn all(&self) -> impl Iterator<Item = &Aircraft> {
+        let min_msg = self.min_messages;
+        self.aircraft.values().filter(move |a| a.messages >= min_msg)
+    }
+
+    /// Get all aircraft including those below message threshold (for internal use)
+    pub fn all_unfiltered(&self) -> impl Iterator<Item = &Aircraft> {
         self.aircraft.values()
     }
 
@@ -260,13 +274,18 @@ impl AircraftStore {
             .retain(|_, a| now.duration_since(a.seen) <= self.ttl);
     }
 
-    /// Number of tracked aircraft
+    /// Number of tracked aircraft (meeting minimum message threshold)
     pub fn len(&self) -> usize {
+        self.all().count()
+    }
+
+    /// Number of all tracked aircraft including below threshold
+    pub fn len_total(&self) -> usize {
         self.aircraft.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.aircraft.is_empty()
+        self.len() == 0
     }
 
     /// Decode CPR coordinates for an aircraft.

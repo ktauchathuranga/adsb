@@ -4,8 +4,6 @@
 //! 
 //! 
 
-#![allow(dead_code)]
-
 mod aircraft;
 mod config;
 mod crc;
@@ -41,8 +39,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("Configuration: {:?}", config);
     }
 
-    // Shared aircraft store
-    let aircraft_store = Arc::new(RwLock::new(AircraftStore::new(config.interactive_ttl)));
+    // Shared aircraft store with min_messages filter from config
+    let aircraft_store = Arc::new(RwLock::new(AircraftStore::with_min_messages(
+        config.interactive_ttl,
+        config.min_messages,
+    )));
 
     // Channel for decoded messages
     let (msg_tx, msg_rx): (Sender<ModesMessage>, Receiver<ModesMessage>) = bounded(1024);
@@ -160,7 +161,7 @@ async fn run_rtlsdr_command(
     use tokio::io::AsyncReadExt;
     use tokio::process::Command;
 
-    let demodulator = Demodulator:: new(config.clone());
+    let mut demodulator = Demodulator::new(config.clone());
 
     // Build rtl_sdr command
     let mut cmd = Command::new("rtl_sdr");
