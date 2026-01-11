@@ -246,14 +246,14 @@ Every Mode S message begins with an **8 microsecond preamble** consisting of fou
 ```
 Preamble (8 µs):
      ▲
-   1 │ █   █               █   █
-     │ █   █               █   █
-     │ █   █               █   █
-   0 │───────────────────────────────►
-     0   1   2   3   4   5   6   7   8 µs
-       │   │               │   │
-       └───┴───────────────┴───┘
-      Pulse positions:  0, 1, 3. 5, 4.5 µs
+   1 │    █   █         █   █
+     │    █   █         █   █
+     │    █   █         █   █
+   0 └──────────────────────────────────►
+          0   1   2   3   4   5   6   7 µs
+          │   │         │   │
+          └───┴─────────┴───┘
+      Pulse positions: 0, 1, 3.5, 4.5 µs
 ```
 
 **Preamble Pattern (at 2 MHz sampling = 16 samples):**
@@ -271,9 +271,9 @@ Bit = 1:                    Bit = 0:
     ▲                           ▲
   1 │██▌                      1 │   ██▌
     │██▌                        │   ██▌
-  0 │   ▌▌▌                   0 │██▌▌▌▌
+  0 │   ███                   0 │█████▌
     └──────► t                  └──────► t
-    0  0. 5  1 µs               0  0.5  1 µs
+    0   0.5  1 µs               0  0.5  1 µs
     
     HIGH then LOW              LOW then HIGH
 ```
