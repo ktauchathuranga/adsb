@@ -96,28 +96,28 @@ cargo build --release
 
 ```bash
 # Live reception from RTL-SDR
-./target/release/dump1090-rs --interactive
+./target/release/adsb --interactive
 
 # From a recorded file
-./target/release/dump1090-rs --ifile recording.bin --interactive
+./target/release/adsb --ifile recording.bin --interactive
 
 # With network output
-./target/release/dump1090-rs --net --interactive
+./target/release/adsb --net --interactive
 
 # With your receiver position (shows distance/bearing to aircraft)
-./target/release/dump1090-rs --interactive --lat 6.9271 --lon 79.8612
+./target/release/adsb --interactive --lat 6.9271 --lon 79.8612
 
 # Stricter ghost filtering (require 3+ messages before showing aircraft)
-./target/release/dump1090-rs --interactive --min-messages 3
+./target/release/adsb --interactive --min-messages 3
 ```
 
 ## Usage
 
 ```
-dump1090-rs - Mode S decoder for RTL-SDR devices
+adsb - Mode S decoder for RTL-SDR devices
 
 USAGE:
-    dump1090-rs [OPTIONS]
+    adsb [OPTIONS]
 
 OPTIONS:
     --device-index <N>     Select RTL device (default: 0)
@@ -206,7 +206,7 @@ Frequency Spectrum:
                     │ █            █
                     │█              █
                     ├───────────────────► Frequency
-                   1089          1090          1091 MHz
+                   1089    1090    1091 MHz
                               Center Freq
 ```
 
@@ -1030,7 +1030,7 @@ Altitude Rate: 32 ft/min per LSB (signed)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              dump1090-rs Architecture                           │
+│                              adsb Architecture                           │
 ├─────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                 │
 │   ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐   │

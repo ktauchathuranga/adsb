@@ -1,5 +1,5 @@
 [package]
-name = "dump1090-rs"
+name = "adsb"
 version = "0.2.0"
 edition = "2024"
 
