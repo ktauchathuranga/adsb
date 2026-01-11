@@ -1,199 +1,385 @@
 <!DOCTYPE html>
+<html lang="en">
 
-<html>
-  <head>
-    <meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
-     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css" integrity="sha512-xwE/Az9zrjBIphAcBb3F6JVqxf46+CDLwfLMHloNu6KEQCAWi6HcDUbeOfBIptF7tcCzusKFjFw2yuvEpDL9wQ==" crossorigin=""/>
-    <style type="text/css">
-      html { height: 100% }
-      body { height: 100%; margin: 0; padding: 0 }
-      .plane-icon {
-        padding:0px;
-        margin:0px;
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+  <title>ADS-B Tracker</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-primary: #1a1a2e;
+      --bg-secondary: #16213e;
+      --bg-card: #0f3460;
+      --accent: #e94560;
+      --text-primary: #eee;
+      --text-secondary: #aaa;
+      --border: #333;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #map_canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 320px;
+      bottom: 0;
+    }
+
+    #sidebar {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 320px;
+      height: 100%;
+      background: var(--bg-secondary);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      padding: 20px;
+      background: var(--bg-primary);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .stats {
+      padding: 15px 20px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 20px;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+    }
+
+    .panel {
+      flex: 1;
+      overflow-y: auto;
+      padding: 15px;
+    }
+
+    .panel-title {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .aircraft-info {
+      background: var(--bg-card);
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 10px;
+    }
+
+    .aircraft-info .flight {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: var(--accent);
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .info-item {
+      padding: 8px;
+      background: var(--bg-secondary);
+      border-radius: 4px;
+    }
+
+    .info-item .label {
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+    }
+
+    .info-item .value {
+      font-size: 0.95rem;
+      font-weight: 500;
+    }
+
+    .no-selection {
+      color: var(--text-secondary);
+      text-align: center;
+      padding: 30px;
+    }
+
+    .plane-icon {
+      font-size: 20px;
+      filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
+    }
+
+    /* Dark map tiles */
+    .leaflet-tile-pane {
+      filter: brightness(0.9) saturate(0.8);
+    }
+
+    .leaflet-control-attribution {
+      background: var(--bg-secondary) !important;
+      color: var(--text-secondary) !important;
+    }
+
+    .leaflet-control-attribution a {
+      color: var(--accent) !important;
+    }
+
+    @media (max-width: 768px) {
+      #map_canvas {
+        right: 0;
+        bottom: 200px;
       }
-      #map_canvas { height: 100% }
-      #info {
-        position: absolute;
-        width:20%;
-        height:100%;
-        bottom:0px;
-        right:0px;
-        top:0px;
-        background-color: white;
-        border-left:1px #666 solid;
-        font-family:Helvetica;
+
+      #sidebar {
+        top: auto;
+        bottom: 0;
+        width: 100%;
+        height: 200px;
+        flex-direction: row;
+        flex-wrap: wrap;
       }
-      #info div {
-        padding:0px;
-        padding-left:10px;
-        margin:0px;
+
+      .header {
+        width: 100%;
+        padding: 10px;
       }
-      #info div h1 {
-        margin-top:10px;
-        font-size:16px;
+
+      .stats {
+        width: 100%;
+        padding: 10px;
       }
-      #info div p {
-        font-size:14px;
-        color:#333;
-      }
-    </style>
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
-    <script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js" integrity="sha512-gZwIG9x3wUXg2hdXF6+rVkLF/0Vi9U8D2Ntg4Ga5I5BZpVkVxlJWbSQtXPSiUTtC0TjtGOmxa1AJPuV0CPthew==" crossorigin=""></script>
-    <script type="text/javascript">
-    Map=null;
-    CenterLat=45.0;
-    CenterLon=9.0;
-    Planes={};
-    NumPlanes = 0;
-    Selected=null
+    }
+  </style>
+</head>
+
+<body>
+  <div id="map_canvas"></div>
+
+  <div id="sidebar">
+    <div class="header">
+      <h1>ADS-B Tracker</h1>
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-value" id="planeCount">0</div>
+        <div class="stat-label">Aircraft</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="updateRate">--</div>
+        <div class="stat-label">Updates/s</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Selected Aircraft</div>
+      <div id="selinfo" class="no-selection">
+        Click on an aircraft to view details
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script>
+    let Map = null;
+    let Planes = {};
+    let Selected = null;
+    let updateCount = 0;
+    let lastUpdateTime = Date.now();
 
     function getIconForPlane(plane) {
-        var r = 255, g = 255, b = 0;
-        var maxalt = 40000; /* Max altitude in the average case */
-        var invalt = maxalt-plane.altitude;
-        var selected = (Selected == plane.hex);
+      const selected = Selected === plane.hex;
+      const rotation = 45 + 360 - plane.track;
 
-        if (invalt < 0) invalt = 0;
-        b = parseInt(255/maxalt*invalt);
+      // Color based on altitude (blue = high, red = low)
+      const maxAlt = 40000;
+      const alt = Math.min(plane.altitude, maxAlt);
+      const hue = Math.floor((alt / maxAlt) * 200 + 20); // 20 (red) to 220 (blue)
 
-        /* As Icon we use the plane emoji, this is a simple solution but
-           is definitely a compromise: we expect the icon to be rotated
-           45 degrees facing north-east by default, this is true in most
-           systems but not all. */
-        var he = document.createElement("P");
-        he.innerHTML = '>';
-        var rotation = 45+360-plane.track;
-        var selhtml = '';
+      // Larger clickable area with transparent padding
+      const outerStyle = `
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      `;
 
-        /* Give a border to the selected plane. */
-        if (Selected == plane.hex) {
-            selhtml = 'border:1px dotted #0000aa; border-radius:10px;';
-        } else {
-            selhtml = '';
-        }
-        he = '<div style="transform: rotate(-'+rotation+'deg); '+selhtml+'">✈️</div>';
-        var icon = L.divIcon({html: he, className: 'plane-icon'});
-        return icon;
+      const innerStyle = `
+        transform: rotate(-${rotation}deg);
+        font-size: 28px;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        ${selected ? 'filter: drop-shadow(0 0 10px #e94560);' : ''}
+      `;
+
+      const html = `<div style="${outerStyle}"><div style="${innerStyle}">✈️</div></div>`;
+      return L.divIcon({ html, className: 'plane-icon', iconSize: [40, 40], iconAnchor: [20, 20] });
     }
 
-    function selectPlane(planehex) {
-        if (!Planes[planehex]) return;
-        var old = Selected;
-        Selected = planehex;
-        if (Planes[old]) {
-            /* Remove the highlight in the previously selected plane. */
-            Planes[old].marker.setIcon(getIconForPlane(Planes[old]));
-        }
-        Planes[Selected].marker.setIcon(getIconForPlane(Planes[Selected]));
-        refreshSelectedInfo();
-    }
+    function selectPlane(hex) {
+      if (!Planes[hex]) return;
 
-    /* Return a closure to caputure the 'hex' argument. This way we don't
-       have to care about how Leaflet passes the object to the callback. */
-    function selectPlaneCallback(hex) {
-        return function() {
-            return selectPlane(hex);
-        }
-    }
-    
-    function refreshGeneralInfo() {
-        var i = document.getElementById('geninfo');
+      const old = Selected;
+      Selected = hex;
 
-        i.innerHTML = NumPlanes+' planes on screen.';
+      if (old && Planes[old]) {
+        Planes[old].marker.setIcon(getIconForPlane(Planes[old]));
+      }
+
+      Planes[Selected].marker.setIcon(getIconForPlane(Planes[Selected]));
+      refreshSelectedInfo();
     }
 
     function refreshSelectedInfo() {
-        var i = document.getElementById('selinfo');
-        var p = Planes[Selected];
+      const el = document.getElementById('selinfo');
+      const p = Planes[Selected];
 
-        if (!p) return;
-        var html = 'ICAO: '+p.hex+'<br>';
-        if (p.flight.length) {
-            html += '<b>'+p.flight+'</b><br>';
-        }
-        html += 'Altitude: '+p.altitude+' feet<br>';
-        html += 'Speed: '+p.speed+' knots<br>';
-        html += 'Coordinates: '+p.lat+', '+p.lon+'<br>';
-        i.innerHTML = html;
+      if (!p) {
+        el.innerHTML = '<div class="no-selection">Click on an aircraft to view details</div>';
+        return;
+      }
+
+      el.innerHTML = `
+        <div class="aircraft-info">
+          <div class="flight">${p.flight || p.hex}</div>
+          <div class="info-grid">
+            <div class="info-item">
+              <div class="label">ICAO</div>
+              <div class="value">${p.hex}</div>
+            </div>
+            <div class="info-item">
+              <div class="label">Altitude</div>
+              <div class="value">${p.altitude.toLocaleString()} ft</div>
+            </div>
+            <div class="info-item">
+              <div class="label">Speed</div>
+              <div class="value">${p.speed} kts</div>
+            </div>
+            <div class="info-item">
+              <div class="label">Track</div>
+              <div class="value">${p.track}°</div>
+            </div>
+            <div class="info-item">
+              <div class="label">Latitude</div>
+              <div class="value">${p.lat.toFixed(4)}</div>
+            </div>
+            <div class="info-item">
+              <div class="label">Longitude</div>
+              <div class="value">${p.lon.toFixed(4)}</div>
+            </div>
+          </div>
+        </div>
+      `;
     }
 
     function fetchData() {
-        $.getJSON('/data.json', function(data) {
-            var stillhere = {}
-            for (var j=0; j < data.length; j++) {
-                var plane = data[j];
-                var marker = null;
-                stillhere[plane.hex] = true;
-                plane.flight = $.trim(plane.flight);
+      fetch('/data.json')
+        .then(res => res.json())
+        .then(data => {
+          const stillHere = {};
 
-                if (Planes[plane.hex]) {
-                    var myplane = Planes[plane.hex];
-                    marker = myplane.marker;
-                    marker.setLatLng([plane.lat,plane.lon]);
-                    marker.setIcon(getIconForPlane(plane));
-                    myplane.altitude = plane.altitude;
-                    myplane.speed = plane.speed;
-                    myplane.lat = plane.lat;
-                    myplane.lon = plane.lon;
-                    myplane.track = plane.track;
-                    myplane.flight = plane.flight;
-                    if (myplane.hex == Selected)
-                        refreshSelectedInfo();
-                } else {
-                    var icon = getIconForPlane(plane);
-                    var marker = L.marker([plane.lat, plane.lon], {icon: icon}).addTo(Map);
-                    var hex = plane.hex;
-                    marker.on('click',selectPlaneCallback(plane.hex));
-                    plane.marker = marker;
-                    marker.planehex = plane.hex;
-                    Planes[plane.hex] = plane;
-                }
+          data.forEach(plane => {
+            stillHere[plane.hex] = true;
+            plane.flight = (plane.flight || '').trim();
 
-                // FIXME: Set the title
-                // if (plane.flight.length == 0)
-                //     marker.setTitle(plane.hex)
-                // else
-                //    marker.setTitle(plane.flight+' ('+plane.hex+')')
+            if (Planes[plane.hex]) {
+              const existing = Planes[plane.hex];
+              existing.marker.setLatLng([plane.lat, plane.lon]);
+              existing.marker.setIcon(getIconForPlane(plane));
+              Object.assign(existing, plane, { marker: existing.marker });
+
+              if (existing.hex === Selected) refreshSelectedInfo();
+            } else {
+              const icon = getIconForPlane(plane);
+              const marker = L.marker([plane.lat, plane.lon], { icon }).addTo(Map);
+              marker.on('click', () => selectPlane(plane.hex));
+              plane.marker = marker;
+              Planes[plane.hex] = plane;
             }
-            NumPlanes = data.length;
+          });
 
-            /* Remove idle planes. */
-            for (var p in Planes) {
-                if (!stillhere[p]) {
-                    Map.removeLayer(Planes[p].marker);
-                    delete Planes[p];
-                }
+          // Remove stale planes
+          Object.keys(Planes).forEach(hex => {
+            if (!stillHere[hex]) {
+              Map.removeLayer(Planes[hex].marker);
+              delete Planes[hex];
             }
-        });
+          });
+
+          // Update stats
+          document.getElementById('planeCount').textContent = data.length;
+
+          updateCount++;
+          const now = Date.now();
+          if (now - lastUpdateTime >= 1000) {
+            document.getElementById('updateRate').textContent = updateCount;
+            updateCount = 0;
+            lastUpdateTime = now;
+          }
+        })
+        .catch(err => console.error('Fetch error:', err));
     }
 
     function initialize() {
-        Map = L.map('map_canvas').setView([37.0, 13.0], 8);
+      Map = L.map('map_canvas').setView([7.0, 80.0], 7);
 
-	L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-	    attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
-	    maxZoom: 18,
-	    id: 'mapbox/streets-v11',
-	    accessToken: 'your.mapbox.access.token'
-	}).addTo(Map);
+      // Use CartoDB dark tiles for a modern look
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://osm.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+        maxZoom: 19
+      }).addTo(Map);
 
-        /* Setup our timer to poll from the server. */
-        window.setInterval(function() {
-            fetchData();
-            refreshGeneralInfo();
-        }, 100);
+      // Fetch data every 100ms
+      setInterval(fetchData, 100);
     }
 
-    </script>
-  </head>
-  <body onload="initialize()">
-    <div id="map_canvas" style="width:80%; height:100%"></div>
-    <div id="info">
-      <div>
-        <h1>Dump1090</h1>
-        <p id="geninfo"></p>
-        <p id="selinfo">Click on a plane for info.</p>
-      </div>
-    </div>
-  </body>
+    document.addEventListener('DOMContentLoaded', initialize);
+  </script>
+</body>
+
 </html>
