@@ -2,9 +2,18 @@
 
 use std::env;
 
+/// Supported SDR device types
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum DeviceType {
+    #[default]
+    RtlSdr,
+    HackRf,
+}
+
 #[derive(Debug, Clone)]
 pub struct Config {
     // Device settings
+    pub device_type: DeviceType,
     pub dev_index: u32,
     pub gain: i32,
     pub enable_agc: bool,
@@ -62,6 +71,7 @@ pub struct DebugFlags {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            device_type: DeviceType::default(),
             dev_index: 0,
             gain: 999999, // Max gain
             enable_agc: false,
@@ -113,6 +123,8 @@ impl Config {
                         .unwrap_or(999999);
                 }
                 "--enable-agc" => config.enable_agc = true,
+                "--hackrf" => config.device_type = DeviceType::HackRf,
+                "--rtlsdr" => config.device_type = DeviceType::RtlSdr,
                 "--freq" => {
                     i += 1;
                     config.freq = args
@@ -212,38 +224,59 @@ impl Config {
 
 fn print_help() {
     println!(
-        r#"dump1090-rs - Mode S decoder for RTL-SDR devices
+        r#"adsb - Mode S / ADS-B decoder for SDR devices
 
-Usage: dump1090-rs [OPTIONS]
+Usage: adsb [OPTIONS]
 
-Options:
-  --device-index <N>     Select RTL device (default: 0)
+DEVICE OPTIONS:
+  --rtlsdr               Use RTL-SDR device (default)
+  --hackrf               Use HackRF One device
+  --device-index <N>     Select device by index (default: 0)
   --gain <db>            Set gain (default: max. Use -10 for auto-gain)
   --enable-agc           Enable Automatic Gain Control
   --freq <hz>            Set frequency (default: 1090 MHz)
+
+INPUT OPTIONS:
   --ifile <filename>     Read data from file (use '-' for stdin)
   --loop                 With --ifile, read the same file in a loop
+
+DISPLAY OPTIONS:
   --interactive          Interactive mode refreshing data on screen
   --interactive-rows <N> Max rows in interactive mode (default: 15)
   --interactive-ttl <s>  Remove from list if idle for <s> seconds (default: 60)
   --raw                  Show only messages hex values
+  --onlyaddr             Show only ICAO addresses
+  --metric               Use metric units (default)
+  --imperial             Use imperial units
+
+NETWORKING:
   --net                  Enable networking
-  --net-only             Enable just networking, no RTL device or file
+  --net-only             Enable just networking, no SDR device or file
   --net-ro-port <port>   TCP port for raw output (default: 30002)
   --net-ri-port <port>   TCP port for raw input (default: 30001)
   --net-http-port <port> HTTP server port (default: 8080)
   --net-sbs-port <port>  TCP port for SBS output (default: 30003)
+
+FILTERING:
+  --min-messages <N>     Min messages before showing aircraft (default: 2)
   --no-fix               Disable single-bit error correction
   --no-crc-check         Disable CRC check (discouraged)
   --aggressive           More CPU for more messages
-  --stats                With --ifile print stats at exit
-  --onlyaddr             Show only ICAO addresses
-  --metric               Use metric units
-  --min-messages <N>     Min messages before showing aircraft (default: 2)
+
+POSITION:
   --lat <degrees>        Receiver latitude for distance calculation
   --lon <degrees>        Receiver longitude for distance calculation
+
+OTHER:
+  --stats                With --ifile print stats at exit
   --debug <flags>        Debug mode (d/D/c/C/p/n/j)
   --help                 Show this help
+
+EXAMPLES:
+  adsb --interactive                    # RTL-SDR with interactive display
+  adsb --hackrf --interactive           # HackRF One with interactive display
+  adsb --net --interactive              # With network output
+  adsb --ifile recording.bin            # From a file
 "#
     );
 }

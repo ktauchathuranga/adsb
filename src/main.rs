@@ -128,27 +128,52 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn run_demodulation(config: &Config, msg_tx:  Sender<ModesMessage>) {
-    let demodulator = Demodulator:: new(config. clone());
+async fn run_demodulation(config: &Config, msg_tx: Sender<ModesMessage>) {
+    use crate::config::DeviceType;
+    
+    let demodulator = Demodulator::new(config.clone());
 
     if let Some(ref filename) = config.filename {
-        if ! config.interactive {
+        if !config.interactive {
             info!("Reading from file: {}", filename);
         }
         if let Err(e) = demodulator.process_file(filename, &msg_tx) {
-            if ! config.interactive {
-                error! ("Error processing file: {}", e);
+            if !config.interactive {
+                error!("Error processing file: {}", e);
             }
         }
     } else {
-        // Try to use rtl_sdr command
-        if ! config.interactive {
-            info! ("Attempting to read from RTL-SDR using rtl_sdr command.. .");
-        }
-        if let Err(e) = run_rtlsdr_command(config, &msg_tx).await {
-            error!("Error with RTL-SDR: {}", e);
+        // Run appropriate SDR command based on device type
+        let result = match config.device_type {
+            DeviceType::RtlSdr => {
+                if !config.interactive {
+                    info!("Attempting to read from RTL-SDR...");
+                }
+                run_rtlsdr_command(config, &msg_tx).await
+            }
+            DeviceType::HackRf => {
+                if !config.interactive {
+                    info!("Attempting to read from HackRF One...");
+                }
+                run_hackrf_command(config, &msg_tx).await
+            }
+        };
+
+        if let Err(e) = result {
+            let device_name = match config.device_type {
+                DeviceType::RtlSdr => "RTL-SDR",
+                DeviceType::HackRf => "HackRF",
+            };
+            error!("Error with {}: {}", device_name, e);
             if !config.interactive {
-                eprintln!("\nMake sure rtl-sdr is installed:  sudo dnf install rtl-sdr");
+                match config.device_type {
+                    DeviceType::RtlSdr => {
+                        eprintln!("\nMake sure rtl-sdr is installed: sudo dnf install rtl-sdr");
+                    }
+                    DeviceType::HackRf => {
+                        eprintln!("\nMake sure hackrf is installed: sudo dnf install hackrf");
+                    }
+                }
                 eprintln!("Or use --ifile to read from a file, or --net-only for network mode");
             }
         }
@@ -159,7 +184,7 @@ async fn run_rtlsdr_command(
     config: &Config,
     msg_tx: &Sender<ModesMessage>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use std::process:: Stdio;
+    use std::process::Stdio;
     use tokio::io::AsyncReadExt;
     use tokio::process::Command;
 
@@ -168,12 +193,12 @@ async fn run_rtlsdr_command(
     // Build rtl_sdr command
     let mut cmd = Command::new("rtl_sdr");
     cmd.arg("-f")
-        .arg(config.freq. to_string())
+        .arg(config.freq.to_string())
         .arg("-s")
         .arg("2000000")
         .arg("-g")
         .arg(if config.gain < 0 {
-            "0". to_string()
+            "0".to_string()
         } else {
             (config.gain / 10).to_string()
         })
@@ -190,7 +215,7 @@ async fn run_rtlsdr_command(
 
     loop {
         let overlap = (8 + 112 - 1) * 4;
-        data. copy_within(read_size..read_size + overlap, 0);
+        data.copy_within(read_size..read_size + overlap, 0);
 
         let mut total_read = 0;
         while total_read < read_size {
@@ -200,11 +225,94 @@ async fn run_rtlsdr_command(
             {
                 Ok(0) => return Ok(()), // EOF
                 Ok(n) => total_read += n,
-                Err(e) => return Err(e. into()),
+                Err(e) => return Err(e.into()),
             }
         }
 
         // Process the data
+        let magnitude = crate::magnitude::compute_magnitude_vector(
+            &data[..overlap + read_size],
+            &demodulator.mag_lut,
+        );
+        demodulator.detect_modes_external(&magnitude, msg_tx);
+    }
+}
+
+/// Run HackRF One using hackrf_transfer command
+async fn run_hackrf_command(
+    config: &Config,
+    msg_tx: &Sender<ModesMessage>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use std::process::Stdio;
+    use tokio::io::AsyncReadExt;
+    use tokio::process::Command;
+
+    let mut demodulator = Demodulator::new(config.clone());
+
+    // Build hackrf_transfer command
+    // -r - : receive to stdout
+    // -f : frequency in Hz
+    // -s : sample rate (2M for ADS-B)
+    // -a : amp enable (0 or 1)
+    // -l : LNA gain (0-40 dB)
+    // -g : VGA gain (0-62 dB)
+    let mut cmd = Command::new("hackrf_transfer");
+    cmd.arg("-r")
+        .arg("-")  // Output to stdout
+        .arg("-f")
+        .arg(config.freq.to_string())
+        .arg("-s")
+        .arg("2000000")
+        .arg("-a")
+        .arg("1")  // Enable amp
+        .arg("-l")
+        .arg("32") // LNA gain
+        .arg("-g")
+        .arg("20") // VGA gain
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn()?;
+    let mut stdout = child.stdout.take().ok_or("Failed to get stdout")?;
+
+    let buffer_len = 16 * 16384 + (8 + 112 - 1) * 4;
+    let mut raw_data = vec![0i8; buffer_len];
+    let mut data = vec![127u8; buffer_len];
+    let read_size = 16 * 16384;
+
+    loop {
+        let overlap = (8 + 112 - 1) * 4;
+        
+        // Copy overlap region
+        for i in 0..overlap {
+            raw_data[i] = raw_data[read_size + i];
+            data[i] = data[read_size + i];
+        }
+
+        let mut total_read = 0;
+        while total_read < read_size {
+            // Read as bytes, then interpret as signed
+            let slice = unsafe {
+                std::slice::from_raw_parts_mut(
+                    raw_data[overlap + total_read..].as_mut_ptr() as *mut u8,
+                    read_size - total_read,
+                )
+            };
+            match stdout.read(slice).await {
+                Ok(0) => return Ok(()), // EOF
+                Ok(n) => total_read += n,
+                Err(e) => return Err(e.into()),
+            }
+        }
+
+        // Convert signed 8-bit (HackRF) to unsigned 8-bit (RTL-SDR format)
+        // HackRF: -128 to 127, centered at 0
+        // RTL-SDR: 0 to 255, centered at 127
+        for i in 0..overlap + read_size {
+            data[i] = (raw_data[i] as i16 + 128) as u8;
+        }
+
+        // Process the data (now in RTL-SDR format)
         let magnitude = crate::magnitude::compute_magnitude_vector(
             &data[..overlap + read_size],
             &demodulator.mag_lut,
@@ -252,6 +360,7 @@ async fn interactive_display(
 
         // Clear screen and move cursor to top
         print!("\x1B[2J\x1B[H");
+        let _ = io::stdout().flush();
 
         // ANSI color codes
         const RED: &str = "\x1B[91m";

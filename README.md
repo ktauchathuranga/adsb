@@ -1,9 +1,11 @@
-# ADS-B Decoder (dump1090-rs)
+# ADS-B Decoder
 
-A complete Rust implementation of a Mode S / ADS-B decoder for RTL-SDR devices.  This project is a faithful port of the popular [dump1090](https://github.com/antirez/dump1090) with additional features and improvements.
+A complete Rust implementation of a Mode S / ADS-B decoder for **RTL-SDR** and **HackRF One** devices. This project is a faithful port of the popular [dump1090](https://github.com/antirez/dump1090) with additional features and improvements.
 
 [![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![RTL-SDR](https://img.shields.io/badge/RTL--SDR-supported-green.svg)]()
+[![HackRF](https://img.shields.io/badge/HackRF-supported-green.svg)]()
 
 ## Table of Contents
 
@@ -36,7 +38,7 @@ A complete Rust implementation of a Mode S / ADS-B decoder for RTL-SDR devices. 
 
 ## Overview
 
-ADS-B (Automatic Dependent Surveillance-Broadcast) is a surveillance technology where aircraft broadcast their position, altitude, speed, and identification.  This project decodes these transmissions using inexpensive RTL-SDR USB dongles. 
+ADS-B (Automatic Dependent Surveillance-Broadcast) is a surveillance technology where aircraft broadcast their position, altitude, speed, and identification. This project decodes these transmissions using inexpensive SDR devices like **RTL-SDR** or **HackRF One**. 
 
 ```
 ┌─────────────┐     1090 MHz      ┌─────────────┐     USB      ┌─────────────┐
@@ -74,14 +76,20 @@ ADS-B (Automatic Dependent Surveillance-Broadcast) is a surveillance technology 
 ### Prerequisites
 
 ```bash
-# Fedora/RHEL
+# Fedora/RHEL - RTL-SDR
 sudo dnf install rtl-sdr rtl-sdr-devel
 
-# Ubuntu/Debian
+# Fedora/RHEL - HackRF
+sudo dnf install hackrf
+
+# Ubuntu/Debian - RTL-SDR
 sudo apt install rtl-sdr librtlsdr-dev
 
+# Ubuntu/Debian - HackRF
+sudo apt install hackrf
+
 # macOS
-brew install librtlsdr
+brew install librtlsdr hackrf
 ```
 
 ### Building
@@ -95,8 +103,11 @@ cargo build --release
 ### Running
 
 ```bash
-# Live reception from RTL-SDR
+# Live reception from RTL-SDR (default)
 ./target/release/adsb --interactive
+
+# Live reception from HackRF One
+./target/release/adsb --hackrf --interactive
 
 # From a recorded file
 ./target/release/adsb --ifile recording.bin --interactive
