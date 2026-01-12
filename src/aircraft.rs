@@ -61,6 +61,10 @@ pub struct Aircraft {
     pub baro_setting: Option<f32>,
     /// Squawk code (identity) from DF5/DF21
     pub squawk: u16,
+    /// Average signal level (magnitude)
+    pub signal_level: u16,
+    /// Count of phase-corrected messages
+    pub phase_corrections: u32,
 }
 
 impl Aircraft {
@@ -92,6 +96,8 @@ impl Aircraft {
             selected_altitude: None,
             baro_setting: None,
             squawk: 0,
+            signal_level: 0,
+            phase_corrections: 0,
         }
     }
 }
@@ -129,6 +135,19 @@ impl AircraftStore {
             .or_insert_with(|| Aircraft::new(addr));
         aircraft.seen = Instant::now();
         aircraft.messages += 1;
+
+        // Track signal quality
+        if mm.signal_level > 0 {
+            // Running average of signal level
+            if aircraft.signal_level == 0 {
+                aircraft.signal_level = mm.signal_level;
+            } else {
+                aircraft.signal_level = ((aircraft.signal_level as u32 * 7 + mm.signal_level as u32) / 8) as u16;
+            }
+        }
+        if mm.phase_corrected {
+            aircraft.phase_corrections += 1;
+        }
 
         match mm.msg_type {
             0 | 4 | 16 | 20 => {

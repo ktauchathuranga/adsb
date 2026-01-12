@@ -11,6 +11,7 @@ mod decoder;
 mod demodulator;
 mod magnitude;
 mod network;
+mod signal;
 
 use std::io::{self, Write};
 use std::sync:: Arc;

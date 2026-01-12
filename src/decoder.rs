@@ -136,8 +136,9 @@ pub struct ModesMessage {
     /// Computed velocity
     pub velocity: u16,
     /// Whether phase correction was applied
-    #[allow(dead_code)]
     pub phase_corrected: bool,
+    /// Signal level (preamble peak magnitude)
+    pub signal_level: u16,
     /// BDS data from DF20/DF21 MB field
     pub bds_data: Option<BdsData>,
 }
@@ -179,6 +180,7 @@ impl Default for ModesMessage {
             vert_rate: 0,
             velocity: 0,
             phase_corrected: false,
+            signal_level: 0,
             bds_data: None,
         }
     }
