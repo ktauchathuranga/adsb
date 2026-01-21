@@ -7,6 +7,8 @@ A complete Rust implementation of a Mode S / ADS-B decoder for **RTL-SDR** and *
 [![RTL-SDR](https://img.shields.io/badge/RTL--SDR-supported-green.svg)]()
 [![HackRF](https://img.shields.io/badge/HackRF-supported-green.svg)]()
 
+![ADS-B Decoder Screenshot](screenshots/a.png)
+
 ## Table of Contents
 
 - [Overview](#overview)
