@@ -3,7 +3,7 @@
 version = 4
 
 [[package]]
-name = "adsb"
+name = "adsb-rx"
 version = "0.2.2"
 dependencies = [
  "bytes",
