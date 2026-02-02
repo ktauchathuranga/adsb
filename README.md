@@ -97,7 +97,7 @@ brew install librtlsdr hackrf
 ### Building
 
 ```bash
-git clone https://github.com/ktauchathuranga/adsb.git
+git clone https://github.com/ktauchathuranga/adsb-rx.git
 cd adsb
 cargo build --release
 ```
@@ -106,22 +106,22 @@ cargo build --release
 
 ```bash
 # Live reception from RTL-SDR (default)
-./target/release/adsb --interactive
+./target/release/adsb-rx --interactive
 
 # Live reception from HackRF One
-./target/release/adsb --hackrf --interactive
+./target/release/adsb-rx --hackrf --interactive
 
 # From a recorded file
-./target/release/adsb --ifile recording.bin --interactive
+./target/release/adsb-rx --ifile recording.bin --interactive
 
 # With network output
-./target/release/adsb --net --interactive
+./target/release/adsb-rx --net --interactive
 
 # With your receiver position (shows distance/bearing to aircraft)
-./target/release/adsb --interactive --lat 6.9271 --lon 79.8612
+./target/release/adsb-rx --interactive --lat 6.9271 --lon 79.8612
 
 # Stricter ghost filtering (require 3+ messages before showing aircraft)
-./target/release/adsb --interactive --min-messages 3
+./target/release/adsb-rx --interactive --min-messages 3
 ```
 
 ## Usage
@@ -130,7 +130,7 @@ cargo build --release
 adsb - Mode S decoder for RTL-SDR devices
 
 USAGE:
-    adsb [OPTIONS]
+    adsb-rx [OPTIONS]
 
 OPTIONS:
     --device-index <N>     Select RTL device (default: 0)
