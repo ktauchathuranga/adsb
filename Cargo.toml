@@ -1,5 +1,5 @@
 [package]
-name = "adsb"
+name = "adsb-rx"
 version = "0.2.2"
 edition = "2024"
 
